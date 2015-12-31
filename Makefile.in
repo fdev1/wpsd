@@ -4,6 +4,7 @@
 ENABLE_AUTOSTART=@autostart@
 
 DESTDIR=
+INSTALL=@INSTALL@
 prefix=@prefix@
 ICONS_DIR=@datarootdir@/icons
 

@@ -1,6 +1,7 @@
 AC_INIT([wpsd.c])
 AC_PROG_CC
-AC_PATH_PROG([INSTALL], [install])
+AC_PROG_INSTALL
+#AC_PATH_PROG([INSTALL], [install])
 AC_HEADER_STDC
 AC_CHECK_HEADERS(unistd.h string.h pwd.h sys/stat.h sys/types.h)
 AC_ARG_ENABLE([autostart],
