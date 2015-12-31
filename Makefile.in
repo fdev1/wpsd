@@ -1,0 +1,38 @@
+
+# set this to 1 to enable an autostart option
+# on the settings dialog
+ENABLE_AUTOSTART=@autostart@
+
+DESTDIR=
+prefix=@prefix@
+ICONS_DIR=@datarootdir@/icons
+
+CC=@CC@
+CFLAGS=-O2 -Wall
+LDFLAGS=-ldl
+EXECUTABLE=wps
+DAEMON=wpsd
+SOURCES=wpsd.c wps.c
+OBJECTS=$(SOURCES:.c=.o)
+
+all: $(SOURCES) $(EXECUTABLE) $(DAEMON)
+
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) -o $@ wps.o
+
+$(DAEMON): $(OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ wpsd.o
+
+.c.o:
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON)
+
+install:
+	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
+	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
+
+uninstall:
+	$(RM) $(DESTDIR)/$(prefix)/bin/$(EXECUTABLE)
+	$(RM) $(DESTDIR)/$(prefix)/bin/$(DAEMON)
