@@ -33,6 +33,7 @@ clean:
 install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
+	$(INSTALL) $(DAEMON) $(DESTDIR)/$(prefix)/bin
 
 uninstall:
 	$(RM) $(DESTDIR)/$(prefix)/bin/$(EXECUTABLE)
