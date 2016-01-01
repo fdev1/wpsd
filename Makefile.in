@@ -9,12 +9,12 @@ prefix=@prefix@
 ICONS_DIR=@datarootdir@/icons
 
 CC=@CC@
-CFLAGS=-O2 -Wall
-LDFLAGS=-ldl
-EXECUTABLE=wps
-DAEMON=wpsd
-SOURCES=wpsd.c wps.c
-OBJECTS=$(SOURCES:.c=.o)
+CFLAGS ?= -O2 -Wall
+LDFLAGS += -ldl
+EXECUTABLE = wps
+DAEMON = wpsd
+SOURCES = wpsd.c wps.c
+OBJECTS = $(SOURCES:.c=.o)
 
 all: $(SOURCES) $(EXECUTABLE) $(DAEMON)
 
