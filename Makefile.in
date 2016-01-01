@@ -1,16 +1,11 @@
-
-# set this to 1 to enable an autostart option
-# on the settings dialog
-ENABLE_AUTOSTART=@autostart@
-
 DESTDIR=
 INSTALL=@INSTALL@
 prefix=@prefix@
 ICONS_DIR=@datarootdir@/icons
-SYSCONFDIR=/etc
+SYSCONFDIR=@sysconfdir@
 
 CC=@CC@
-CFLAGS ?= -Wall -DSYSCONFDIR=\"@sysconfdir@\"
+CFLAGS += -Wall -DSYSCONFDIR=\"@sysconfdir@\"
 EXECUTABLE = wps
 DAEMON = wpsd
 SOURCES = wpsd.c wps.c utils.c

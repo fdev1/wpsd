@@ -40,6 +40,7 @@ static _wps_free_location_func _wps_free_location = NULL;
 static char _location[2048] = "";
 static char _daemonized = 0;
 static char _verbose = 0;
+static char _address_lookup = 1;
 static char *_socket_path = NULL;
 static char *_wpsapi_lib_path = NULL;
 static char *_config_file = NULL;
@@ -90,7 +91,9 @@ static void update_location()
 		int i = 0, j = 0;
 		WPS_ReturnCode ret;
 		WPS_Location *location;
-		ret = _wps_location(NULL, WPS_FULL_STREET_ADDRESS_LOOKUP, &location);
+		WPS_StreetAddressLookup address_lookup =
+			(_address_lookup) ? WPS_FULL_STREET_ADDRESS_LOOKUP : WPS_NO_STREET_ADDRESS_LOOKUP;
+		ret = _wps_location(NULL, address_lookup, &location);
 		if (ret != WPS_OK)
 		{
 			log_message(LOG_ERR, "Call to WPS_location() failed");
@@ -103,25 +106,28 @@ static void update_location()
 		i += sprintf(_location + i, "Accuracy: %lf\n", location->hpe);
 		i += sprintf(_location + i, "Speed: %lf\n", location->speed);
 		i += sprintf(_location + i, "Bearing: %lf\n", location->bearing);
-		i += sprintf(_location + i, "Street Number: %s\n", 
-			location->street_address->street_number);
-		while (location->street_address->address_line[j] != NULL)
+		if (_address_lookup)
 		{
-			i += sprintf(_location + i, "Street[%i]: %s\n", j, 
-				location->street_address->address_line[j]);
-			j++;
+			i += sprintf(_location + i, "Street Number: %s\n", 
+				location->street_address->street_number);
+			while (location->street_address->address_line[j] != NULL)
+			{
+				i += sprintf(_location + i, "Street[%i]: %s\n", j, 
+					location->street_address->address_line[j]);
+				j++;
+			}
+			i += sprintf(_location + i, "City: %s\n", location->street_address->city);
+			i += sprintf(_location + i, "State: %s\n", location->street_address->state.name);
+			i += sprintf(_location + i, "State Code: %s\n", location->street_address->state.code);
+			i += sprintf(_location + i, "Postal Code: %s\n", location->street_address->postal_code);
+			i += sprintf(_location + i, "County: %s\n", location->street_address->county);
+			i += sprintf(_location + i, "Province: %s\n", location->street_address->province);
+			i += sprintf(_location + i, "Region: %s\n", location->street_address->region);
+			i += sprintf(_location + i, "Country: %s\n", location->street_address->country.name);
+			i += sprintf(_location + i, "Country Code: %s\n", location->street_address->country.code);
 		}
-		i += sprintf(_location + i, "City: %s\n", location->street_address->city);
-		i += sprintf(_location + i, "State: %s\n", location->street_address->state.name);
-		i += sprintf(_location + i, "State Code: %s\n", location->street_address->state.code);
-		i += sprintf(_location + i, "Postal Code: %s\n", location->street_address->postal_code);
-		i += sprintf(_location + i, "County: %s\n", location->street_address->county);
-		i += sprintf(_location + i, "Province: %s\n", location->street_address->province);
-		i += sprintf(_location + i, "Region: %s\n", location->street_address->region);
-		i += sprintf(_location + i, "Country: %s\n", location->street_address->country.name);
-		i += sprintf(_location + i, "Country Code: %s\n", location->street_address->country.code);
-		_next_update = (unsigned long) time(NULL) + _update_interval;
 		_wps_free_location(location);
+		_next_update = (unsigned long) time(NULL) + _update_interval;
 	}
 }
 
@@ -282,6 +288,12 @@ static int read_config()
 			_wpsapi_lib_path = strdup(value_ptr);
 			log_message(LOG_MSG, "Wpsapi library path set to %s",
 				_wpsapi_lib_path);
+		}
+		else if (!strcasecmp(line_ptr, "address_lookup"))
+		{
+			_address_lookup = (!strcasecmp(value_ptr, "yes")) ? 1 : 0;
+			log_message(LOG_MSG, "Address lookup %s",
+				(_address_lookup) ? "enabled" : "disabled");
 		}
 	}
 	return 0;
