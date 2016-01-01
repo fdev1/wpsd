@@ -23,17 +23,21 @@ $(EXECUTABLE): $(OBJECTS)
 
 $(DAEMON): $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ wpsd.o
+	sed -e "s|@PREFIX@|$(prefix)|g" wpsd.service.in > wpsd.service
 
 .c.o:
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON)
+	rm -f wpsd.service
 
 install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
+	$(INSTALL) -d /usr/lib/systemd/system
 	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(DAEMON) $(DESTDIR)/$(prefix)/bin
+	$(INSTALL) wpsd.service /usr/lib/systemd/system
 
 uninstall:
 	$(RM) $(DESTDIR)/$(prefix)/bin/$(EXECUTABLE)
