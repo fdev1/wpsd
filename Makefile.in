@@ -10,7 +10,6 @@ ICONS_DIR=@datarootdir@/icons
 
 CC=@CC@
 CFLAGS ?= -O2 -Wall
-LDFLAGS += -ldl
 EXECUTABLE = wps
 DAEMON = wpsd
 SOURCES = wpsd.c wps.c
@@ -22,7 +21,7 @@ $(EXECUTABLE): $(OBJECTS)
 	$(CC) -o $@ wps.o
 
 $(DAEMON): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ wpsd.o
+	$(CC) -ldl -o $@ wpsd.o
 	sed -e "s|@PREFIX@|$(prefix)|g" wpsd.service.in > wpsd.service
 
 .c.o:
