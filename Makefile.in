@@ -34,10 +34,10 @@ clean:
 
 install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
-	$(INSTALL) -d /usr/lib/systemd/system
+	$(INSTALL) -d $(DESTDIR)/usr/lib/systemd/system
 	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(DAEMON) $(DESTDIR)/$(prefix)/bin
-	$(INSTALL) wpsd.service /usr/lib/systemd/system
+	$(INSTALL) wpsd.service $(DESTDIR)/usr/lib/systemd/system
 
 uninstall:
 	$(RM) $(DESTDIR)/$(prefix)/bin/$(EXECUTABLE)
