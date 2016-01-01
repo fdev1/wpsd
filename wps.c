@@ -17,7 +17,7 @@ void print_message(const char *fmt, ...)
 	va_end(va);
 }
 
-int main()
+int print_raw_socket()
 {
 	int fd, bytes_read;
 	struct sockaddr_un addr;
@@ -25,7 +25,7 @@ int main()
 	fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (fd == -1)
 	{
-		print_message("Could not open socket.");
+		print_message("socket() failed");
 		return -1;
 	}
 	memset(&addr, 0, sizeof(struct sockaddr_un));
@@ -34,7 +34,8 @@ int main()
 	
 	if (connect(fd, (struct sockaddr*) &addr, sizeof(struct sockaddr_un)) == -1)
 	{
-		print_message("Could not open socket: %s", SOCKET_NAME);
+		print_message("Daemon not running");
+		print_message("Socket: %s", SOCKET_NAME);
 		return -1;
 	}
 
@@ -49,4 +50,34 @@ int main()
 
 	close(fd);
 	return 0;
+}
+
+void print_usage()
+{
+	printf("usage: wps\n");
+}
+
+int main(int argc, char **argv)
+{
+	int i;
+	for (i = 1; i < argc; i++)
+	{
+		if (!strcmp("--help", argv[i]) || !strcmp("-h", argv[i]))
+		{
+			print_usage();
+			return 0;
+		}
+		else if (!strcmp("--version", argv[i]) || !strcmp("-V", argv[i]))
+		{
+			printf("WiFi Positioning System Version 0\n");
+			printf("Copyright 2015 Fernando Rodriguez\n");
+			return 0;
+		}
+		else
+		{
+			print_usage();
+			return -1;
+		}
+	}
+	return print_raw_socket();
 }
