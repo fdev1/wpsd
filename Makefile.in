@@ -32,6 +32,12 @@ clean:
 	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON)
 	rm -f wpsd.service
 
+mrproper: clean
+	rm -f configure
+	rm -fr autom4te.cache
+	rm -f config.log
+	rm -f config.status
+
 install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) -d $(DESTDIR)/usr/lib/systemd/system

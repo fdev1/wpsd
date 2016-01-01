@@ -35,6 +35,7 @@ static char _location[2048] = "";
 static char _daemonized = 0;
 static char _verbose = 0;
 static char *_socket_path = NULL;
+static char *_wpsapi_lib_path = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
 
@@ -48,7 +49,7 @@ static int print_message(const char *fmt, ...)
 	va_start(ap, fmt);
 	if (1 || !_daemonized)
 	{
-		ret +=  fprintf(stderr, "wpsd[%i]: ", getpid());
+		ret +=  fprintf(stderr, "wpsd: ");
 		ret += vfprintf(stderr, fmt, ap);
 		ret +=  fprintf(stderr, "\n");
 	}
@@ -149,7 +150,7 @@ static int start_listening()
  */
 static int wpsapi_library_load()
 {
-	wpsapi_lib = dlopen(WPSAPI_LIB, RTLD_NOW /* RTLD_LAZY */);
+	wpsapi_lib = dlopen(_wpsapi_lib_path, RTLD_NOW /* RTLD_LAZY */);
 	if (wpsapi_lib == NULL)
 	{
 		print_message("%s", dlerror());
@@ -243,9 +244,31 @@ static int read_config()
 			if (_verbose)
 				print_message("Socket path set to %s", _socket_path);
 		}
+		else if (!strcasecmp(line_ptr, "wpsapi_library"))
+		{
+			if (_wpsapi_lib_path != NULL)
+				free(_wpsapi_lib_path);
+			_wpsapi_lib_path = strdup(value_ptr);
+			if (_verbose)
+				print_message("Wpsapi library path set to %s", _wpsapi_lib_path);
+		}
 	}
 	return 0;
 }
+
+/**
+ * Print command options
+ */
+static void print_usage()
+{
+	printf("usage: wpsd [options]\n");
+	printf("\n");
+	printf("Options:\n");
+	printf("  --daemon\tRun as a daemon\n");
+	printf("  --test\tTest provider\n");
+	printf("  --verbose\tEnable verbose output\n");
+}
+
 
 int main(int argc, char **argv)
 {
@@ -261,10 +284,28 @@ int main(int argc, char **argv)
 		{
 			_verbose = 1;
 		}
+		else if (!strcmp("--test", argv[i]))
+		{
+			print_message("--test option not yet implemented");
+			return -1;
+		}
+		else if (!strcmp("--help", argv[i]))
+		{
+			print_usage();
+			return 0;
+		}
+		else
+		{
+			print_message("Invalid option: %s", argv[i]);
+			print_usage();
+			return -1;
+		}
 	}
 	read_config();
 	if (_socket_path == NULL)
 		_socket_path = SOCKET_NAME;
+	if (_wpsapi_lib_path == NULL)
+		_wpsapi_lib_path = WPSAPI_LIB;
 	/* load libwpsapi.so */
 	if (wpsapi_library_load() == -1)
 		return -1;
