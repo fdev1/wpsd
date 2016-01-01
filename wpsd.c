@@ -8,7 +8,10 @@
 #include <dlfcn.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <assert.h>
+#include "utils.h"
 
 #define SOCKET_NAME "/tmp/wpsd.socket"
 #define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
@@ -30,6 +33,8 @@ static _wps_free_location_func _wps_free_location = NULL;
 
 static char _location[2048] = "";
 static char _daemonized = 0;
+static char _verbose = 0;
+static char *_socket_path = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
 
@@ -41,7 +46,7 @@ static int print_message(const char *fmt, ...)
 	va_list ap;
 	int ret = 0;
 	va_start(ap, fmt);
-	if (!_daemonized)
+	if (1 || !_daemonized)
 	{
 		ret +=  fprintf(stderr, "wpsd[%i]: ", getpid());
 		ret += vfprintf(stderr, fmt, ap);
@@ -111,11 +116,17 @@ static int start_listening()
 
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, SOCKET_NAME, sizeof(addr.sun_path) - 1);
+	strncpy(addr.sun_path, _socket_path, sizeof(addr.sun_path) - 1);
 	if (bind(fd_socket, (struct sockaddr*) &addr, sizeof(addr)) == -1)
+	{
+		print_message("bind() failed -- Daemon already running?");
 		return -1;
+	}
 	if (listen(fd_socket, 5) == -1)
+	{
+		print_message("listen() failed");
 		return -1;
+	}
 	
 	if (chmod(SOCKET_NAME, 766) == -1)
 		print_message("Could not set socket permissions");
@@ -199,13 +210,66 @@ static int daemonize()
 	return 0;
 }
 
+/**
+ * Read config
+ */
+static int read_config()
+{
+	int fd;
+	char buf[1024];
+	char *line_ptr, *value_ptr;
+	if ((fd = open("/etc/wpsd.conf", O_RDONLY)) == -1)
+	{
+		print_message("could not open wpsd.conf");
+		return -1;
+	}
+	while (fd_readline(fd, buf, 1024) != NULL)
+	{
+		line_ptr = strstrip(buf, " \t");
+		if (*line_ptr == '#' || *line_ptr == ';' || *line_ptr == '\0')
+			continue;
+		value_ptr = split(line_ptr, '=');
+		if (!strcasecmp(line_ptr, "update_interval"))
+		{
+			_update_interval = atoi(value_ptr);
+			if (_verbose)
+				print_message("Update interval set to: %i", _update_interval);
+		}
+		else if (!strcasecmp(line_ptr, "socket"))
+		{
+			if (_socket_path != NULL)
+				free(_socket_path);
+			_socket_path = strdup(value_ptr);
+			if (_verbose)
+				print_message("Socket path set to %s", _socket_path);
+		}
+	}
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
+	int i;
+	char do_daemonize = 0;
+	for (i = 1; i < argc; i++)
+	{
+		if (!strcmp("--daemon", argv[i]))
+		{
+			do_daemonize = 1;
+		}
+		else if (!strcmp("--verbose", argv[i]))
+		{
+			_verbose = 1;
+		}
+	}
+	read_config();
+	if (_socket_path == NULL)
+		_socket_path = SOCKET_NAME;
 	/* load libwpsapi.so */
 	if (wpsapi_library_load() == -1)
 		return -1;
 
-	if (argc > 1 && !strcmp(argv[1], "--daemon"))
+	if (do_daemonize)
 	{
 		int pid;
 		if ((pid = daemonize()) == -1)
