@@ -2,8 +2,8 @@
 Description=WiFi Positioning System Daemon
 
 [Service]
-Type=forking
-ExecStart=@PREFIX@/bin/wpsd --daemon
+Type=simple
+ExecStart=@PREFIX@/bin/wpsd --verbose
 
 [Install]
 WantedBy=multi-user.target

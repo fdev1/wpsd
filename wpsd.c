@@ -17,6 +17,12 @@
 #define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
 #define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"
 
+#ifdef SYSCONFDIR
+#define CONFIG_FILE SYSCONFDIR "/wpsd.conf"
+#else
+#define CONFIG_FILE "/etc/wpsd.conf"
+#endif
+
 /*
  * Import libwpsapi.so functions
  */
@@ -36,8 +42,13 @@ static char _daemonized = 0;
 static char _verbose = 0;
 static char *_socket_path = NULL;
 static char *_wpsapi_lib_path = NULL;
+static char *_config_file = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
+
+#define LOG_MSG 2
+#define LOG_WRN 1
+#define LOG_ERR 0
 
 /**
  * Print debug messages to stdout or syslog
@@ -57,6 +68,18 @@ static int print_message(const char *fmt, ...)
 	return ret;
 }
 
+static void log_message(int level, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	if (_verbose || level < 2)
+	{
+		fprintf(stderr, "wpsd: ");
+		vfprintf(stderr, fmt, ap);
+		fprintf(stderr, "\n");
+	}
+}
+
 /**
  * Update the cached location
  */
@@ -70,6 +93,7 @@ static void update_location()
 		ret = _wps_location(NULL, WPS_FULL_STREET_ADDRESS_LOOKUP, &location);
 		if (ret != WPS_OK)
 		{
+			log_message(LOG_ERR, "Call to WPS_location() failed");
 			_location[0] = '\0';
 			return;
 		}
@@ -111,6 +135,7 @@ static int start_listening()
 
 	unlink(SOCKET_NAME);
 
+	log_message(LOG_MSG, "Preparing to listen on %s", _socket_path);
 	fd_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (fd_socket == -1)
 		return -1;
@@ -120,17 +145,18 @@ static int start_listening()
 	strncpy(addr.sun_path, _socket_path, sizeof(addr.sun_path) - 1);
 	if (bind(fd_socket, (struct sockaddr*) &addr, sizeof(addr)) == -1)
 	{
-		print_message("bind() failed -- Daemon already running?");
+		log_message(LOG_ERR, "Call to bind() failed -- Daemon already running?");
 		return -1;
 	}
 	if (listen(fd_socket, 5) == -1)
 	{
-		print_message("listen() failed");
+		log_message(LOG_ERR, "Call to listen() failed");
 		return -1;
 	}
 	
 	if (chmod(SOCKET_NAME, 766) == -1)
-		print_message("Could not set socket permissions");
+		log_message(LOG_WRN, "Could not set socket permissions");
+	log_message(LOG_MSG, "Listening on %s", _socket_path);
 
 	while (1)
 	{
@@ -138,9 +164,7 @@ static int start_listening()
 			continue;
 		update_location();
 		if (write(fd_client, _location, strlen(_location)) == -1)
-		{
-			print_message("write() failed");
-		}
+			log_message(LOG_ERR, "Call to write() failed");
 		close(fd_client);
 	}
 }
@@ -150,12 +174,14 @@ static int start_listening()
  */
 static int wpsapi_library_load()
 {
+	log_message(LOG_MSG, "Loading %s", _wpsapi_lib_path);
 	wpsapi_lib = dlopen(_wpsapi_lib_path, RTLD_NOW /* RTLD_LAZY */);
 	if (wpsapi_lib == NULL)
 	{
 		print_message("%s", dlerror());
 		return -1;
 	}
+	log_message(LOG_MSG, "Loading symbols");
 	_wps_load = (_wps_load_func) dlsym(wpsapi_lib, "WPS_load");
 	if (_wps_load == NULL)
 	{
@@ -180,6 +206,8 @@ static int wpsapi_library_load()
 		print_message("%s", dlerror());
 		return -1;
 	}
+
+	log_message(LOG_MSG, "Initializing wpsapi...");
 	_wps_load();
 	_wps_set_key(API_KEY);
 	return 0;
@@ -193,7 +221,7 @@ static int daemonize()
 	int pid;
 	if ((pid = fork()) == -1)
 	{
-		print_message("fork() failed");
+		log_message(LOG_ERR, "Call to fork() failed");
 		return -1;
 	}
 	else if (pid != 0)
@@ -201,7 +229,7 @@ static int daemonize()
 		return 1;
 	}
 	if (setsid() == -1)
-		print_message("setsid() failed");
+		log_message(LOG_WRN, "Call to setsid() failed");
 
 	close(2);
 	close(1);
@@ -219,9 +247,14 @@ static int read_config()
 	int fd;
 	char buf[1024];
 	char *line_ptr, *value_ptr;
-	if ((fd = open("/etc/wpsd.conf", O_RDONLY)) == -1)
+
+	if (_config_file == NULL)
+		_config_file = CONFIG_FILE;
+	log_message(LOG_MSG, "Reading config file: %s", _config_file);
+
+	if ((fd = open(_config_file, O_RDONLY)) == -1)
 	{
-		print_message("could not open wpsd.conf");
+		log_message(LOG_ERR, "Could not open %s", _config_file);
 		return -1;
 	}
 	while (fd_readline(fd, buf, 1024) != NULL)
@@ -233,24 +266,22 @@ static int read_config()
 		if (!strcasecmp(line_ptr, "update_interval"))
 		{
 			_update_interval = atoi(value_ptr);
-			if (_verbose)
-				print_message("Update interval set to: %i", _update_interval);
+			log_message(LOG_MSG, "Update interval set to %i", _update_interval);
 		}
 		else if (!strcasecmp(line_ptr, "socket"))
 		{
 			if (_socket_path != NULL)
 				free(_socket_path);
 			_socket_path = strdup(value_ptr);
-			if (_verbose)
-				print_message("Socket path set to %s", _socket_path);
+			log_message(LOG_MSG, "Socket path set to %s", _socket_path);
 		}
 		else if (!strcasecmp(line_ptr, "wpsapi_library"))
 		{
 			if (_wpsapi_lib_path != NULL)
 				free(_wpsapi_lib_path);
 			_wpsapi_lib_path = strdup(value_ptr);
-			if (_verbose)
-				print_message("Wpsapi library path set to %s", _wpsapi_lib_path);
+			log_message(LOG_MSG, "Wpsapi library path set to %s",
+				_wpsapi_lib_path);
 		}
 	}
 	return 0;
@@ -267,6 +298,7 @@ static void print_usage()
 	printf("  --daemon\tRun as a daemon\n");
 	printf("  --test\tTest provider\n");
 	printf("  --verbose\tEnable verbose output\n");
+	printf("  --config\tUse specified config file\n");
 }
 
 
@@ -286,7 +318,7 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--test", argv[i]))
 		{
-			print_message("--test option not yet implemented");
+			log_message(LOG_ERR, "--test option not implemented");
 			return -1;
 		}
 		else if (!strcmp("--help", argv[i]))
@@ -294,9 +326,24 @@ int main(int argc, char **argv)
 			print_usage();
 			return 0;
 		}
+		else if (!strcmp("--config", argv[i]))
+		{
+			if (++i >= argc)
+			{
+				log_message(LOG_ERR, "Invalid option: --config must be followed by a file path");
+				print_usage();
+				return -1;
+			}
+			_config_file = strdup(argv[i]);
+			if (_config_file == NULL)
+			{
+				log_message(LOG_ERR, "Call to strdup() failed");
+				return -1;
+			}
+		}
 		else
 		{
-			print_message("Invalid option: %s", argv[i]);
+			log_message(LOG_ERR, "Invalid option: %s", argv[i]);
 			print_usage();
 			return -1;
 		}
@@ -306,6 +353,7 @@ int main(int argc, char **argv)
 		_socket_path = SOCKET_NAME;
 	if (_wpsapi_lib_path == NULL)
 		_wpsapi_lib_path = WPSAPI_LIB;
+
 	/* load libwpsapi.so */
 	if (wpsapi_library_load() == -1)
 		return -1;

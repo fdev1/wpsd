@@ -10,7 +10,7 @@ ICONS_DIR=@datarootdir@/icons
 SYSCONFDIR=/etc
 
 CC=@CC@
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -Wall -DSYSCONFDIR=\"@sysconfdir@\"
 EXECUTABLE = wps
 DAEMON = wpsd
 SOURCES = wpsd.c wps.c utils.c
