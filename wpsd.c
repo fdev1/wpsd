@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <dirent.h>
 #include "utils.h"
 #include "logger.h"
 #include "provider.h"
@@ -29,7 +30,7 @@
 struct wps_provider
 {
 	int (*init)(struct wps_context *context);
-	wps_location* (*get_location)(int address_lookup);
+	struct wps_location* (*get_location)(int address_lookup);
 	void (*destroy)();
 	struct wps_provider *next;
 };
@@ -215,11 +216,12 @@ static int load_providers()
 		log_message(LOG_ERR, "Could not open providers directory.");
 		return -1;
 	}
-	while (entry = readdir(dir))
+	while ((entry = readdir(dir)))
 	{
 		log_message(LOG_MSG, "Loading %s...", entry->d_name);
 	}
 	closedir(dir);
+	return 0;
 }
 
 /**

@@ -6,7 +6,7 @@
 
 struct wps_context
 {
-	void (*logger)(int level, char *fmt, ...);
+	void (*logger)(int level, const char *fmt, ...);
 };
 
 struct wps_street_address
