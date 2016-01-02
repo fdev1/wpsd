@@ -13,16 +13,26 @@
 #include <assert.h>
 #include "utils.h"
 #include "logger.h"
+#include "provider.h"
 
 #define SOCKET_NAME "/tmp/wpsd.socket"
 #define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
 #define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"
+#define PROVIDERS_DIR "/usr/lib/wpsd/providers"
 
 #ifdef SYSCONFDIR
 #define CONFIG_FILE SYSCONFDIR "/wpsd.conf"
 #else
 #define CONFIG_FILE "/etc/wpsd.conf"
 #endif
+
+struct wps_provider
+{
+	int (*init)(struct wps_context *context);
+	wps_location* (*get_location)(int address_lookup);
+	void (*destroy)();
+	struct wps_provider *next;
+};
 
 /*
  * Import libwpsapi.so functions
@@ -46,6 +56,7 @@ static char *_wpsapi_lib_path = NULL;
 static char *_config_file = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
+static struct wps_provider *providers = NULL;
 
 /**
  * Update the cached location
@@ -185,6 +196,32 @@ static int wpsapi_library_load()
 	return 0;
 }
 
+static int load_providers()
+{
+	DIR *dir;
+	struct dirent *entry;
+	struct wps_context *context;
+
+	log_message(LOG_MSG, "Loading providers...");
+	context = (struct wps_context*) malloc(sizeof(struct wps_context));
+	if (context == NULL)
+	{
+		log_message(LOG_ERR, "Out of memory: malloc() failed.");
+		return -1;
+	}
+	context->logger = &log_message;
+	if ((dir = opendir(PROVIDERS_DIR)) == NULL)
+	{
+		log_message(LOG_ERR, "Could not open providers directory.");
+		return -1;
+	}
+	while (entry = readdir(dir))
+	{
+		log_message(LOG_MSG, "Loading %s...", entry->d_name);
+	}
+	closedir(dir);
+}
+
 /**
  * Daemonize
  */
@@ -296,7 +333,8 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--test", argv[i]))
 		{
-			log_message(LOG_ERR, "--test option not implemented");
+			load_providers();
+			//log_message(LOG_ERR, "--test option not implemented");
 			return -1;
 		}
 		else if (!strcmp("--help", argv[i]))
