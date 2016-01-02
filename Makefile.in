@@ -46,8 +46,8 @@ install:
 	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(DAEMON) $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(WPSAPI_PROVIDER) $(DESTDIR)/usr/lib/wpsd/providers
-	$(INSTALL) wpsapi/libwpsapi-fedora.so $(DESTDIR)/usr/lib/wpsd/providers
-	$(INSTALL) wpsapi/libwpsapi-ubuntu.so $(DESTDIR)/usr/lib/wpsd/providers
+	$(INSTALL) wpsapi/lib/libwpsapi-fedora.so $(DESTDIR)/usr/lib/wpsd/providers
+	$(INSTALL) wpsapi/lib/libwpsapi-ubuntu.so $(DESTDIR)/usr/lib/wpsd/providers
 	$(INSTALL) wpsd.service $(DESTDIR)/usr/lib/systemd/system
 	$(INSTALL) wpsd.conf $(DESTDIR)/$(SYSCONFDIR)
 
