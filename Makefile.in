@@ -23,7 +23,7 @@ $(DAEMON): $(OBJECTS)
 	sed -e "s|@PREFIX@|$(prefix)|g" wpsd.service.in > wpsd.service
 
 $(WPSAPI_PROVIDER): $(OBJECTS)
-	$(CC) -shared -ldl -o $@ wpsapi.o logger.o
+	$(CC) -shared -ldl -o $@ wpsapi.o
 
 .c.o:
 	$(CC) -fPIC $(CFLAGS) -c $< -o $@

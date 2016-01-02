@@ -5,7 +5,7 @@
 #include "logger.h"
 #include "provider.h"
 
-#define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
+#define WPSAPI_LIB "/usr/lib/wpsd/providers/lib/libwpsapi-ubuntu.so"
 #define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"
 
 /*
@@ -34,13 +34,13 @@ struct wps_location *provider_get_location(int address_lookup)
 	result = malloc(sizeof(struct wps_location));
 	if (result == NULL)
 	{
-		log_message(LOG_ERR, "Out of memory: malloc() failed");
+		_context->logger(LOG_ERR, "Out of memory: malloc() failed");
 		return result;
 	}
 	ret = _wps_location(NULL, lookup, &location);
 	if (ret != WPS_OK)
 	{
-		log_message(LOG_ERR, "Call to WPS_location() failed");
+		_context->logger(LOG_ERR, "Call to WPS_location() failed");
 		return NULL;
 	}
 	result->latitude = location->latitude;
@@ -80,51 +80,54 @@ struct wps_location *provider_get_location(int address_lookup)
  */
 static int wpsapi_library_load()
 {
-	log_message(LOG_MSG, "Loading %s", _wpsapi_lib_path);
+	_context->logger(LOG_MSG, "Loading %s", _wpsapi_lib_path);
 	wpsapi_lib = dlopen(_wpsapi_lib_path, RTLD_NOW /* RTLD_LAZY */);
 	if (wpsapi_lib == NULL)
 	{
-		log_message(LOG_ERR, "Cannot load library: %s", dlerror());
+		_context->logger(LOG_ERR, "Cannot load library: %s", dlerror());
 		return WPS_PROVIDER_FAILURE;
 	}
-	log_message(LOG_MSG, "Loading symbols");
+	_context->logger(LOG_MSG, "Loading symbols");
 	_wps_load = (_wps_load_func) dlsym(wpsapi_lib, "WPS_load");
 	if (_wps_load == NULL)
 	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
+		_context->logger(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return WPS_PROVIDER_FAILURE;
 	}
 	_wps_set_key = (_wps_set_key_func) dlsym(wpsapi_lib, "WPS_set_key");
 	if (_wps_set_key == NULL)
 	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
+		_context->logger(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return WPS_PROVIDER_FAILURE;
 	}
 	_wps_location = (_wps_location_func) dlsym(wpsapi_lib, "WPS_location");
 	if (_wps_location == NULL)
 	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
+		_context->logger(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return WPS_PROVIDER_FAILURE;
 	}
 	_wps_free_location = (_wps_free_location_func) dlsym(wpsapi_lib, "WPS_free_location");
 	if (_wps_free_location == NULL)
 	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
+		_context->logger(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return -1;
 	}
 
-	log_message(LOG_MSG, "Initializing wpsapi...");
+	_context->logger(LOG_MSG, "Initializing wpsapi...");
 	_wps_load();
 	_wps_set_key(API_KEY);
 	return WPS_PROVIDER_SUCCESS;
 }
 
+/**
+ * Initialize the provider
+ */
 int provider_init(struct wps_context *context)
 {
 	if (context == NULL)
 		return WPS_PROVIDER_FAILURE;
 	_context = context;
-	if (_wpsapi_lib_path)
+	if (_wpsapi_lib_path == NULL)
 		_wpsapi_lib_path = WPSAPI_LIB;
 	return wpsapi_library_load();
 }

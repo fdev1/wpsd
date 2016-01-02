@@ -4,7 +4,6 @@
 #include <wpsapi.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <stdarg.h>
 #include <dlfcn.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -17,8 +16,6 @@
 #include "provider.h"
 
 #define SOCKET_NAME "/tmp/wpsd.socket"
-#define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
-#define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"
 #define PROVIDERS_DIR "/usr/lib/wpsd/providers"
 
 #ifdef SYSCONFDIR
@@ -31,23 +28,8 @@ struct wps_provider
 {
 	int (*init)(struct wps_context *context);
 	struct wps_location* (*get_location)(int address_lookup);
-	void (*destroy)();
 	struct wps_provider *next;
 };
-
-/*
- * Import libwpsapi.so functions
- */
-typedef WPS_ReturnCode (*_wps_set_key_func)(const char* key);
-typedef WPS_ReturnCode (*_wps_load_func)();
-typedef WPS_ReturnCode (*_wps_location_func)(WPS_SimpleAuthentication* authentication,
-	WPS_StreetAddressLookup street_address_lookup, WPS_Location** location);
-typedef void (*_wps_free_location_func)(WPS_Location*);
-static void *wpsapi_lib = NULL;
-static _wps_set_key_func _wps_set_key = NULL;
-static _wps_load_func _wps_load = NULL;
-static _wps_location_func _wps_location = NULL;
-static _wps_free_location_func _wps_free_location = NULL;
 
 static char _location[2048] = "";
 static char _daemonized = 0;
@@ -57,7 +39,10 @@ static char *_wpsapi_lib_path = NULL;
 static char *_config_file = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
-static struct wps_provider *providers = NULL;
+
+static struct wps_context __context;
+static struct wps_context *_context = &__context;
+static struct wps_provider *_providers = NULL;
 
 /**
  * Update the cached location
@@ -66,24 +51,21 @@ static void update_location()
 {
 	if (_next_update <= (unsigned long) time(NULL))
 	{
-		int i = 0, j = 0;
-		WPS_ReturnCode ret;
-		WPS_Location *location;
-		WPS_StreetAddressLookup address_lookup =
-			(_address_lookup) ? WPS_FULL_STREET_ADDRESS_LOOKUP : WPS_NO_STREET_ADDRESS_LOOKUP;
-		ret = _wps_location(NULL, address_lookup, &location);
-		if (ret != WPS_OK)
+		int i = 0;
+		struct wps_location *loc;
+		loc = _providers->get_location(0);
+		if (loc == NULL)
 		{
-			log_message(LOG_ERR, "Call to WPS_location() failed");
-			_location[0] = '\0';
+			log_message(LOG_ERR, "Could not get location: get_location() failed");
 			return;
 		}
-		i += sprintf(_location + i, "Latitude: %lf\n", location->latitude);
-		i += sprintf(_location + i, "Longitude: %lf\n", location->longitude);
-		i += sprintf(_location + i, "APs: %i\n", location->nap);
-		i += sprintf(_location + i, "Accuracy: %lf\n", location->hpe);
-		i += sprintf(_location + i, "Speed: %lf\n", location->speed);
-		i += sprintf(_location + i, "Bearing: %lf\n", location->bearing);
+		i += sprintf(_location + i, "Latitude: %lf\n", loc->latitude);
+		i += sprintf(_location + i, "Longitude: %lf\n", loc->longitude);
+		i += sprintf(_location + i, "APs: %i\n", loc->sources);
+		i += sprintf(_location + i, "Accuracy: %lf\n", loc->accuracy);
+		i += sprintf(_location + i, "Speed: %lf\n", loc->speed);
+		i += sprintf(_location + i, "Bearing: %lf\n", loc->bearing);
+		#if 0
 		if (_address_lookup)
 		{
 			i += sprintf(_location + i, "Street Number: %s\n", 
@@ -105,6 +87,7 @@ static void update_location()
 			i += sprintf(_location + i, "Country Code: %s\n", location->street_address->country.code);
 		}
 		_wps_free_location(location);
+		#endif
 		_next_update = (unsigned long) time(NULL) + _update_interval;
 	}
 }
@@ -154,63 +137,16 @@ static int start_listening()
 }
 
 /**
- * Load the wpsapi library
+ * Load location providers
  */
-static int wpsapi_library_load()
-{
-	log_message(LOG_MSG, "Loading %s", _wpsapi_lib_path);
-	wpsapi_lib = dlopen(_wpsapi_lib_path, RTLD_NOW /* RTLD_LAZY */);
-	if (wpsapi_lib == NULL)
-	{
-		log_message(LOG_ERR, "Cannot load library: %s", dlerror());
-		return -1;
-	}
-	log_message(LOG_MSG, "Loading symbols");
-	_wps_load = (_wps_load_func) dlsym(wpsapi_lib, "WPS_load");
-	if (_wps_load == NULL)
-	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
-		return -1;
-	}
-	_wps_set_key = (_wps_set_key_func) dlsym(wpsapi_lib, "WPS_set_key");
-	if (_wps_set_key == NULL)
-	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
-		return -1;
-	}
-	_wps_location = (_wps_location_func) dlsym(wpsapi_lib, "WPS_location");
-	if (_wps_location == NULL)
-	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
-		return -1;
-	}
-	_wps_free_location = (_wps_free_location_func) dlsym(wpsapi_lib, "WPS_free_location");
-	if (_wps_free_location == NULL)
-	{
-		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
-		return -1;
-	}
-
-	log_message(LOG_MSG, "Initializing wpsapi...");
-	_wps_load();
-	_wps_set_key(API_KEY);
-	return 0;
-}
-
 static int load_providers()
 {
 	DIR *dir;
 	struct dirent *entry;
-	struct wps_context *context;
+	struct stat filestat;
+	char filename[1024];
 
 	log_message(LOG_MSG, "Loading providers...");
-	context = (struct wps_context*) malloc(sizeof(struct wps_context));
-	if (context == NULL)
-	{
-		log_message(LOG_ERR, "Out of memory: malloc() failed.");
-		return -1;
-	}
-	context->logger = &log_message;
 	if ((dir = opendir(PROVIDERS_DIR)) == NULL)
 	{
 		log_message(LOG_ERR, "Could not open providers directory.");
@@ -218,7 +154,62 @@ static int load_providers()
 	}
 	while ((entry = readdir(dir)))
 	{
-		log_message(LOG_MSG, "Loading %s...", entry->d_name);
+		void *handle;
+		struct wps_provider *provider;
+		if (entry->d_name[0] == '.')
+			continue;
+		strcpy(filename, PROVIDERS_DIR);
+		strcat(filename, "/");
+		strcat(filename, entry->d_name);
+		if (stat(filename, &filestat) == -1)
+			continue;
+		if (S_ISDIR(filestat.st_mode) || !S_ISREG(filestat.st_mode))
+			continue;
+		log_message(LOG_MSG, "Loading %s...", filename);
+		handle = dlopen(filename, RTLD_NOW);
+		if (handle == NULL)
+		{
+			log_message(LOG_ERR, "Could not load provider module %s", entry->d_name);
+			continue;
+		}
+		provider = malloc(sizeof(struct wps_provider));
+		if (provider == NULL)
+		{
+			log_message(LOG_ERR, "Out of memory: malloc() failed");
+			continue;
+		}
+		memset(provider, 0, sizeof(struct wps_provider));
+		provider->init = dlsym(handle, "provider_init");
+		if (provider->init == NULL)
+		{
+			log_message(LOG_ERR, "Could not load provider_init: %s", dlerror());
+			free(provider);
+			continue;
+		}
+		provider->get_location = dlsym(handle, "provider_get_location");
+		if (provider->get_location == NULL)
+		{
+			log_message(LOG_ERR, "Could not load provider_get_location: %s", dlerror());
+			free(provider);
+			continue;
+		}
+		if (provider->init(_context) != WPS_PROVIDER_SUCCESS)
+		{
+			log_message(LOG_ERR, "Provider init failed");
+			continue;
+		}
+		if (_providers == NULL)
+		{
+			_providers = provider;
+		}
+		else
+		{
+			struct wps_provider *p = _providers;
+			while (p->next != NULL)
+				p = p->next;
+			p->next = provider;
+		}
+		log_message(LOG_MSG, "Provider loaded");
 	}
 	closedir(dir);
 	return 0;
@@ -318,11 +309,16 @@ static void print_usage()
 	printf("  --config\tUse specified config file\n");
 }
 
-
+/**
+ * Entry point
+ */
 int main(int argc, char **argv)
 {
 	int i;
 	char do_daemonize = 0;
+
+	_context->logger = &log_message;
+
 	for (i = 1; i < argc; i++)
 	{
 		if (!strcmp("--daemon", argv[i]))
@@ -335,8 +331,7 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--test", argv[i]))
 		{
-			load_providers();
-			//log_message(LOG_ERR, "--test option not implemented");
+			log_message(LOG_ERR, "--test option not implemented");
 			return -1;
 		}
 		else if (!strcmp("--help", argv[i]))
@@ -377,12 +372,12 @@ int main(int argc, char **argv)
 	read_config();
 	if (_socket_path == NULL)
 		_socket_path = SOCKET_NAME;
-	if (_wpsapi_lib_path == NULL)
-		_wpsapi_lib_path = WPSAPI_LIB;
-
-	/* load libwpsapi.so */
-	if (wpsapi_library_load() == -1)
+	
+	if (load_providers() == -1)
+	{
+		_context->logger(LOG_ERR, "Could not load providers");
 		return -1;
+	}
 
 	if (do_daemonize)
 	{
