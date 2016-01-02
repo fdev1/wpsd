@@ -5,13 +5,15 @@ ICONS_DIR=@datarootdir@/icons
 SYSCONFDIR=@sysconfdir@
 
 CC=@CC@
+CFLAGS += @CFLAGS@ @DEFS@
 CFLAGS += -Wall -DSYSCONFDIR=\"@sysconfdir@\"
 EXECUTABLE = wps
 DAEMON = wpsd
-SOURCES = wpsd.c wps.c utils.c logger.c
+WPSAPI_PROVIDER = libwpsapi_provider.so
+SOURCES = wpsd.c wps.c utils.c logger.c wpsapi.c
 OBJECTS = $(SOURCES:.c=.o)
 
-all: $(SOURCES) $(EXECUTABLE) $(DAEMON)
+all: $(SOURCES) $(EXECUTABLE) $(DAEMON) $(WPSAPI_PROVIDER)
 
 $(EXECUTABLE): $(OBJECTS)
 	$(CC) -o $@ wps.o
@@ -20,11 +22,14 @@ $(DAEMON): $(OBJECTS)
 	$(CC) -ldl -o $@ wpsd.o utils.o logger.o
 	sed -e "s|@PREFIX@|$(prefix)|g" wpsd.service.in > wpsd.service
 
+$(WPSAPI_PROVIDER): $(OBJECTS)
+	$(CC) -shared -ldl -o $@ wpsapi.o logger.o
+
 .c.o:
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -fPIC $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON)
+	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON) $(WPSAPI_PROVIDER)
 	rm -f wpsd.service
 
 mrproper: clean

@@ -9,7 +9,7 @@ void log_message(int level, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	if (level < _log_level)
+	if (level <= _log_level)
 	{
 		fprintf(stderr, "wpsd: ");
 		vfprintf(stderr, fmt, ap);

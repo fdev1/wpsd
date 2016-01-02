@@ -1,9 +1,11 @@
-AC_INIT([wpsd.c])
+AC_INIT([Wifi Positioning System], [0.0.1], [http://github.com/fernando-rodriguez/wpsd])
+AC_CONFIG_SRCDIR(wpsd.c)
 AC_PROG_CC
-#AC_PROG_INSTALL
+dnl AC_PROG_INSTALL
+AC_PROG_SED
 AC_PATH_PROG([INSTALL], [install])
 AC_HEADER_STDC
-AC_CHECK_HEADERS(unistd.h string.h pwd.h sys/stat.h sys/types.h)
+AC_CHECK_HEADERS(unistd.h)
 AC_ARG_ENABLE([autostart],
 	AS_HELP_STRING([--enable-autostart], [Add enable/disable autostart option in settings dialog]))
 if test x$enable_autostart = xno ; then
@@ -11,5 +13,9 @@ if test x$enable_autostart = xno ; then
 else
 	autostart=1
 fi
+
+SRCS="wps.c wpsd.c logger.c utils.c wpsapi.c"
 AC_SUBST(autostart)
-AC_OUTPUT(Makefile)
+AC_SUBST(SRCS)
+AC_CONFIG_FILES(Makefile)
+AC_OUTPUT

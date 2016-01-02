@@ -55,6 +55,11 @@ int print_raw_socket()
 void print_usage()
 {
 	printf("usage: wps\n");
+	printf("\n");
+	printf("Options:\n");
+	printf("  --socket\tUse the specified socket.\n");
+	printf("  --version\tPrint version information.\n");
+	printf("  --help\tPrint this help.\n");
 }
 
 int main(int argc, char **argv)
@@ -69,12 +74,15 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--version", argv[i]) || !strcmp("-V", argv[i]))
 		{
-			printf("WiFi Positioning System Version 0\n");
-			printf("Copyright 2015 Fernando Rodriguez\n");
+			printf("%s Utility Version %s\n",
+				PACKAGE_NAME, PACKAGE_VERSION);
+			printf("Copyright 2015-2016 Fernando Rodriguez\n");
+			printf("Please report bugs to %s\n", PACKAGE_BUGREPORT);
 			return 0;
 		}
 		else
 		{
+			print_message("Invalid option: %s", argv[i]);
 			print_usage();
 			return -1;
 		}

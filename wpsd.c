@@ -319,6 +319,14 @@ int main(int argc, char **argv)
 				return -1;
 			}
 		}
+		else if (!strcmp("--version", argv[i]))
+		{
+			printf("%s Daemon Version %s\n",
+				PACKAGE_NAME, PACKAGE_VERSION);
+			printf("Copyright 2015-2016 Fernando Rodriguez\n");
+			printf("Please report bugs to %s\n", PACKAGE_BUGREPORT);
+			return 0;
+		}
 		else
 		{
 			log_message(LOG_ERR, "Invalid option: %s", argv[i]);
