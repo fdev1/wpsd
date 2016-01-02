@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include "utils.h"
+#include "logger.h"
 
 #define SOCKET_NAME "/tmp/wpsd.socket"
 #define WPSAPI_LIB "/usr/lib64/wpsapi/libwpsapi.so"
@@ -39,47 +40,12 @@ static _wps_free_location_func _wps_free_location = NULL;
 
 static char _location[2048] = "";
 static char _daemonized = 0;
-static char _verbose = 0;
 static char _address_lookup = 1;
 static char *_socket_path = NULL;
 static char *_wpsapi_lib_path = NULL;
 static char *_config_file = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
-
-#define LOG_MSG 2
-#define LOG_WRN 1
-#define LOG_ERR 0
-
-/**
- * Print debug messages to stdout or syslog
- */
-static int print_message(const char *fmt, ...)
-{
-	va_list ap;
-	int ret = 0;
-	va_start(ap, fmt);
-	if (1 || !_daemonized)
-	{
-		ret +=  fprintf(stderr, "wpsd: ");
-		ret += vfprintf(stderr, fmt, ap);
-		ret +=  fprintf(stderr, "\n");
-	}
-	va_end(ap);
-	return ret;
-}
-
-static void log_message(int level, const char *fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	if (_verbose || level < 2)
-	{
-		fprintf(stderr, "wpsd: ");
-		vfprintf(stderr, fmt, ap);
-		fprintf(stderr, "\n");
-	}
-}
 
 /**
  * Update the cached location
@@ -184,32 +150,32 @@ static int wpsapi_library_load()
 	wpsapi_lib = dlopen(_wpsapi_lib_path, RTLD_NOW /* RTLD_LAZY */);
 	if (wpsapi_lib == NULL)
 	{
-		print_message("%s", dlerror());
+		log_message(LOG_ERR, "Cannot load library: %s", dlerror());
 		return -1;
 	}
 	log_message(LOG_MSG, "Loading symbols");
 	_wps_load = (_wps_load_func) dlsym(wpsapi_lib, "WPS_load");
 	if (_wps_load == NULL)
 	{
-		print_message("%s", dlerror());
+		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return -1;
 	}
 	_wps_set_key = (_wps_set_key_func) dlsym(wpsapi_lib, "WPS_set_key");
 	if (_wps_set_key == NULL)
 	{
-		print_message("%s", dlerror());
+		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return -1;
 	}
 	_wps_location = (_wps_location_func) dlsym(wpsapi_lib, "WPS_location");
 	if (_wps_location == NULL)
 	{
-		print_message("%s", dlerror());
+		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return -1;
 	}
 	_wps_free_location = (_wps_free_location_func) dlsym(wpsapi_lib, "WPS_free_location");
 	if (_wps_free_location == NULL)
 	{
-		print_message("%s", dlerror());
+		log_message(LOG_ERR, "Could not load symbol: %s", dlerror());
 		return -1;
 	}
 
@@ -326,7 +292,7 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--verbose", argv[i]))
 		{
-			_verbose = 1;
+			log_set_level(LOG_MSG);
 		}
 		else if (!strcmp("--test", argv[i]))
 		{
