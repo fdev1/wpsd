@@ -5,7 +5,7 @@
 #include "logger.h"
 #include "provider.h"
 
-#define WPSAPI_LIB "/usr/lib/wpsd/providers/lib/libwpsapi-ubuntu.so"
+#define WPSAPI_LIB "/usr/lib/uppd/providers/lib/libwpsapi-ubuntu.so"
 #define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"
 
 /*
