@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <wpsapi.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <dlfcn.h>
@@ -11,6 +10,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <dirent.h>
+
 #include "utils.h"
 #include "logger.h"
 #include "provider.h"
@@ -32,7 +32,6 @@ struct wps_provider
 };
 
 static char _location[2048] = "";
-static char _daemonized = 0;
 static char _address_lookup = 1;
 static char *_socket_path = NULL;
 static char *_wpsapi_lib_path = NULL;
@@ -56,15 +55,16 @@ static void update_location()
 		loc = _providers->get_location(0);
 		if (loc == NULL)
 		{
-			log_message(LOG_ERR, "Could not get location: get_location() failed");
+			_context->logger(LOG_ERR, "Could not get location: get_location() failed");
 			return;
 		}
 		i += sprintf(_location + i, "Latitude: %lf\n", loc->latitude);
 		i += sprintf(_location + i, "Longitude: %lf\n", loc->longitude);
-		i += sprintf(_location + i, "APs: %i\n", loc->sources);
+		i += sprintf(_location + i, "Sources: %i\n", loc->sources);
 		i += sprintf(_location + i, "Accuracy: %lf\n", loc->accuracy);
 		i += sprintf(_location + i, "Speed: %lf\n", loc->speed);
 		i += sprintf(_location + i, "Bearing: %lf\n", loc->bearing);
+		i += sprintf(_location + i, "Type: Wifi\n");
 		#if 0
 		if (_address_lookup)
 		{
@@ -102,7 +102,7 @@ static int start_listening()
 
 	unlink(SOCKET_NAME);
 
-	log_message(LOG_MSG, "Preparing to listen on %s", _socket_path);
+	_context->logger(LOG_MSG, "Preparing to listen on %s", _socket_path);
 	fd_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (fd_socket == -1)
 		return -1;
@@ -112,18 +112,18 @@ static int start_listening()
 	strncpy(addr.sun_path, _socket_path, sizeof(addr.sun_path) - 1);
 	if (bind(fd_socket, (struct sockaddr*) &addr, sizeof(addr)) == -1)
 	{
-		log_message(LOG_ERR, "Call to bind() failed -- Daemon already running?");
+		_context->logger(LOG_ERR, "Call to bind() failed -- Daemon already running?");
 		return -1;
 	}
 	if (listen(fd_socket, 5) == -1)
 	{
-		log_message(LOG_ERR, "Call to listen() failed");
+		_context->logger(LOG_ERR, "Call to listen() failed");
 		return -1;
 	}
 	
 	if (chmod(SOCKET_NAME, 766) == -1)
-		log_message(LOG_WRN, "Could not set socket permissions");
-	log_message(LOG_MSG, "Listening on %s", _socket_path);
+		_context->logger(LOG_WRN, "Could not set socket permissions");
+	_context->logger(LOG_MSG, "Listening on %s", _socket_path);
 
 	while (1)
 	{
@@ -131,7 +131,7 @@ static int start_listening()
 			continue;
 		update_location();
 		if (write(fd_client, _location, strlen(_location)) == -1)
-			log_message(LOG_ERR, "Call to write() failed");
+			_context->logger(LOG_ERR, "Call to write() failed");
 		close(fd_client);
 	}
 }
@@ -146,10 +146,10 @@ static int load_providers()
 	struct stat filestat;
 	char filename[1024];
 
-	log_message(LOG_MSG, "Loading providers...");
+	_context->logger(LOG_MSG, "Loading providers...");
 	if ((dir = opendir(PROVIDERS_DIR)) == NULL)
 	{
-		log_message(LOG_ERR, "Could not open providers directory.");
+		_context->logger(LOG_ERR, "Could not open providers directory.");
 		return -1;
 	}
 	while ((entry = readdir(dir)))
@@ -165,37 +165,37 @@ static int load_providers()
 			continue;
 		if (S_ISDIR(filestat.st_mode) || !S_ISREG(filestat.st_mode))
 			continue;
-		log_message(LOG_MSG, "Loading %s...", filename);
+		_context->logger(LOG_MSG, "Loading %s...", filename);
 		handle = dlopen(filename, RTLD_NOW);
 		if (handle == NULL)
 		{
-			log_message(LOG_ERR, "Could not load provider module %s", entry->d_name);
+			_context->logger(LOG_ERR, "Could not load provider module %s", entry->d_name);
 			continue;
 		}
 		provider = malloc(sizeof(struct wps_provider));
 		if (provider == NULL)
 		{
-			log_message(LOG_ERR, "Out of memory: malloc() failed");
+			_context->logger(LOG_ERR, "Out of memory: malloc() failed");
 			continue;
 		}
 		memset(provider, 0, sizeof(struct wps_provider));
 		provider->init = dlsym(handle, "provider_init");
 		if (provider->init == NULL)
 		{
-			log_message(LOG_ERR, "Could not load provider_init: %s", dlerror());
+			_context->logger(LOG_ERR, "Could not load provider_init: %s", dlerror());
 			free(provider);
 			continue;
 		}
 		provider->get_location = dlsym(handle, "provider_get_location");
 		if (provider->get_location == NULL)
 		{
-			log_message(LOG_ERR, "Could not load provider_get_location: %s", dlerror());
+			_context->logger(LOG_ERR, "Could not load provider_get_location: %s", dlerror());
 			free(provider);
 			continue;
 		}
 		if (provider->init(_context) != WPS_PROVIDER_SUCCESS)
 		{
-			log_message(LOG_ERR, "Provider init failed");
+			_context->logger(LOG_ERR, "Provider init failed");
 			continue;
 		}
 		if (_providers == NULL)
@@ -209,35 +209,9 @@ static int load_providers()
 				p = p->next;
 			p->next = provider;
 		}
-		log_message(LOG_MSG, "Provider loaded");
+		_context->logger(LOG_MSG, "Provider loaded");
 	}
 	closedir(dir);
-	return 0;
-}
-
-/**
- * Daemonize
- */
-static int daemonize()
-{
-	int pid;
-	if ((pid = fork()) == -1)
-	{
-		log_message(LOG_ERR, "Call to fork() failed");
-		return -1;
-	}
-	else if (pid != 0)
-	{
-		return 1;
-	}
-	if (setsid() == -1)
-		log_message(LOG_WRN, "Call to setsid() failed");
-
-	close(2);
-	close(1);
-	close(0);
-
-	_daemonized = 1;
 	return 0;
 }
 
@@ -252,11 +226,11 @@ static int read_config()
 
 	if (_config_file == NULL)
 		_config_file = CONFIG_FILE;
-	log_message(LOG_MSG, "Reading config file: %s", _config_file);
+	_context->logger(LOG_MSG, "Reading config file: %s", _config_file);
 
 	if ((fd = open(_config_file, O_RDONLY)) == -1)
 	{
-		log_message(LOG_ERR, "Could not open %s", _config_file);
+		_context->logger(LOG_ERR, "Could not open %s", _config_file);
 		return -1;
 	}
 	while (fd_readline(fd, buf, 1024) != NULL)
@@ -268,27 +242,27 @@ static int read_config()
 		if (!strcasecmp(line_ptr, "update_interval"))
 		{
 			_update_interval = atoi(value_ptr);
-			log_message(LOG_MSG, "Update interval set to %i", _update_interval);
+			_context->logger(LOG_MSG, "Update interval set to %i", _update_interval);
 		}
 		else if (!strcasecmp(line_ptr, "socket"))
 		{
 			if (_socket_path != NULL)
 				free(_socket_path);
 			_socket_path = strdup(value_ptr);
-			log_message(LOG_MSG, "Socket path set to %s", _socket_path);
+			_context->logger(LOG_MSG, "Socket path set to %s", _socket_path);
 		}
 		else if (!strcasecmp(line_ptr, "wpsapi_library"))
 		{
 			if (_wpsapi_lib_path != NULL)
 				free(_wpsapi_lib_path);
 			_wpsapi_lib_path = strdup(value_ptr);
-			log_message(LOG_MSG, "Wpsapi library path set to %s",
+			_context->logger(LOG_MSG, "Wpsapi library path set to %s",
 				_wpsapi_lib_path);
 		}
 		else if (!strcasecmp(line_ptr, "address_lookup"))
 		{
 			_address_lookup = (!strcasecmp(value_ptr, "yes")) ? 1 : 0;
-			log_message(LOG_MSG, "Address lookup %s",
+			_context->logger(LOG_MSG, "Address lookup %s",
 				(_address_lookup) ? "enabled" : "disabled");
 		}
 	}
@@ -331,7 +305,7 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp("--test", argv[i]))
 		{
-			log_message(LOG_ERR, "--test option not implemented");
+			_context->logger(LOG_ERR, "--test option not implemented");
 			return -1;
 		}
 		else if (!strcmp("--help", argv[i]))
@@ -343,14 +317,14 @@ int main(int argc, char **argv)
 		{
 			if (++i >= argc)
 			{
-				log_message(LOG_ERR, "Invalid option: --config must be followed by a file path");
+				_context->logger(LOG_ERR, "Invalid option: --config must be followed by a file path");
 				print_usage();
 				return -1;
 			}
 			_config_file = strdup(argv[i]);
 			if (_config_file == NULL)
 			{
-				log_message(LOG_ERR, "Call to strdup() failed");
+				_context->logger(LOG_ERR, "Call to strdup() failed");
 				return -1;
 			}
 		}
@@ -364,7 +338,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			log_message(LOG_ERR, "Invalid option: %s", argv[i]);
+			_context->logger(LOG_ERR, "Invalid option: %s", argv[i]);
 			print_usage();
 			return -1;
 		}

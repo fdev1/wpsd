@@ -1,4 +1,4 @@
-AC_INIT([Wifi Positioning System], [0.0.1], [http://github.com/fernando-rodriguez/wpsd])
+AC_INIT([Unified Position Provider], [0.0.1], [http://github.com/fernando-rodriguez/wpsd])
 AC_CONFIG_SRCDIR(wpsd.c)
 AC_PROG_CC
 dnl AC_PROG_INSTALL

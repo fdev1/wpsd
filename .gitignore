@@ -6,5 +6,7 @@ Makefile
 *.o
 wpsd
 wps
+upp
+uppd
 libwpsapi_provider.so
 wpsd.service

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 
 char *fd_readline(int fd, char *buf, int len)
@@ -22,6 +23,9 @@ char *fd_readline(int fd, char *buf, int len)
 	return buf;
 }
 
+/**
+ * Strip string in-place
+ */
 char *strstrip(char *str, const char *strip_chars)
 {
 	char *strptr, *strip_chars_ptr, stripped;
@@ -67,6 +71,9 @@ char *strstrip(char *str, const char *strip_chars)
 	return strptr;
 }
 
+/**
+ * Split string in-place
+ */
 char *split(char *str, char split_char)
 {
 	if (str == NULL)
@@ -76,4 +83,27 @@ char *split(char *str, char split_char)
 	if (*str == split_char)
 		*str++ = '\0';
 	return str;
+}
+
+/**
+ * Daemonize
+ */
+int daemonize()
+{
+	int pid;
+	if ((pid = fork()) == -1)
+	{
+		fprintf(stderr, "Call to fork() failed");
+		return -1;
+	}
+	else if (pid != 0)
+	{
+		return 1;
+	}
+	if (setsid() == -1)
+		fprintf(stderr, "Call to setsid() failed");
+	close(2);
+	close(1);
+	close(0);
+	return 0;
 }
