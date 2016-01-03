@@ -37,6 +37,7 @@ mrproper: clean
 	rm -fr autom4te.cache
 	rm -f config.log
 	rm -f config.status
+	rm -f Makefile
 
 install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
