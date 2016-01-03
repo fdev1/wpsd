@@ -3,7 +3,7 @@
 #include <dlfcn.h>
 #include "wpsapi/include/wpsapi.h"
 #include "logger.h"
-#include "provider.h"
+#include "upp_provider.h"
 
 #define WPSAPI_LIB "/usr/lib/uppd/providers/lib/libwpsapi-ubuntu.so"
 #define API_KEY "eJwz5DQ0AAFTA2NjzmoLcwtnVxNXF10zS0sLXVMLMzddZyNnN11zNwsXR0tjoICjUy0AFI4LWw"

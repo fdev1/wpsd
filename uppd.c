@@ -13,16 +13,12 @@
 
 #include "utils.h"
 #include "logger.h"
-#include "provider.h"
+#include "upp.h"
+#include "upp_provider.h"
 
 #define SOCKET_NAME "/tmp/uppd.socket"
 #define PROVIDERS_DIR "/usr/lib/uppd/providers"
-
-#ifdef SYSCONFDIR
 #define CONFIG_FILE SYSCONFDIR "/uppd.conf"
-#else
-#define CONFIG_FILE "/etc/uppd.conf"
-#endif
 
 struct wps_provider
 {
@@ -39,6 +35,9 @@ static char *_config_file = NULL;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
 
+/*
+ * Upp context and providers list
+ */
 static struct wps_context __context;
 static struct wps_context *_context = &__context;
 static struct wps_provider *_providers = NULL;
