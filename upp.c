@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define SOCKET_NAME "/tmp/wpsd.socket"
+#define SOCKET_NAME "/tmp/uppd.socket"
 
 void print_message(const char *fmt, ...)
 {

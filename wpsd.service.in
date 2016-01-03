@@ -1,9 +1,0 @@
-[Unit]
-Description=WiFi Positioning System Daemon
-
-[Service]
-Type=simple
-ExecStart=@PREFIX@/bin/wpsd --verbose
-
-[Install]
-WantedBy=multi-user.target

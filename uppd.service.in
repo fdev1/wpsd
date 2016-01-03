@@ -1,0 +1,9 @@
+[Unit]
+Description=Unified Position Provider Daemon
+
+[Service]
+Type=simple
+ExecStart=@PREFIX@/bin/uppd --verbose
+
+[Install]
+WantedBy=multi-user.target

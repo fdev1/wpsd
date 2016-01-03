@@ -10,3 +10,4 @@ upp
 uppd
 libwpsapi_provider.so
 wpsd.service
+uppd.service

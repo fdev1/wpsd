@@ -15,13 +15,13 @@
 #include "logger.h"
 #include "provider.h"
 
-#define SOCKET_NAME "/tmp/wpsd.socket"
-#define PROVIDERS_DIR "/usr/lib/wpsd/providers"
+#define SOCKET_NAME "/tmp/uppd.socket"
+#define PROVIDERS_DIR "/usr/lib/uppd/providers"
 
 #ifdef SYSCONFDIR
-#define CONFIG_FILE SYSCONFDIR "/wpsd.conf"
+#define CONFIG_FILE SYSCONFDIR "/uppd.conf"
 #else
-#define CONFIG_FILE "/etc/wpsd.conf"
+#define CONFIG_FILE "/etc/uppd.conf"
 #endif
 
 struct wps_provider

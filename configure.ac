@@ -1,5 +1,5 @@
 AC_INIT([Unified Position Provider], [0.0.1], [http://github.com/fernando-rodriguez/wpsd])
-AC_CONFIG_SRCDIR(wpsd.c)
+AC_CONFIG_SRCDIR(uppd.c)
 AC_PROG_CC
 dnl AC_PROG_INSTALL
 AC_PROG_SED
@@ -14,7 +14,7 @@ else
 	autostart=1
 fi
 
-SRCS="wps.c wpsd.c logger.c utils.c wpsapi.c"
+SRCS="upp.c uppd.c logger.c utils.c wpsapi.c"
 AC_SUBST(autostart)
 AC_SUBST(SRCS)
 AC_CONFIG_FILES(Makefile)

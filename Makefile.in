@@ -7,20 +7,20 @@ SYSCONFDIR=@sysconfdir@
 CC=@CC@
 CFLAGS += @CFLAGS@ @DEFS@
 CFLAGS += -Wall -DSYSCONFDIR=\"@sysconfdir@\"
-EXECUTABLE = wps
-DAEMON = wpsd
+EXECUTABLE = upp
+DAEMON = uppd
 WPSAPI_PROVIDER = libwpsapi_provider.so
-SOURCES = wpsd.c wps.c utils.c logger.c wpsapi.c
+SOURCES = uppd.c upp.c utils.c logger.c wpsapi.c
 OBJECTS = $(SOURCES:.c=.o)
 
 all: $(SOURCES) $(EXECUTABLE) $(DAEMON) $(WPSAPI_PROVIDER)
 
 $(EXECUTABLE): $(OBJECTS)
-	$(CC) -o $@ wps.o
+	$(CC) -o $@ upp.o
 
 $(DAEMON): $(OBJECTS)
-	$(CC) -ldl -o $@ wpsd.o utils.o logger.o
-	sed -e "s|@PREFIX@|$(prefix)|g" wpsd.service.in > wpsd.service
+	$(CC) -ldl -o $@ uppd.o utils.o logger.o
+	sed -e "s|@PREFIX@|$(prefix)|g" uppd.service.in > uppd.service
 
 $(WPSAPI_PROVIDER): $(OBJECTS)
 	$(CC) -shared -ldl -o $@ wpsapi.o
@@ -30,7 +30,7 @@ $(WPSAPI_PROVIDER): $(OBJECTS)
 
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE) $(DAEMON) $(WPSAPI_PROVIDER)
-	rm -f wpsd.service
+	rm -f uppd.service
 
 mrproper: clean
 	rm -f configure
@@ -42,14 +42,14 @@ install:
 	$(INSTALL) -d $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) -d $(DESTDIR)/usr/lib/systemd/system
 	$(INSTALL) -d $(DESTDIR)/$(SYSCONFDIR)
-	$(INSTALL) -d $(DESTDIR)/usr/lib/wpsd/providers/lib
+	$(INSTALL) -d $(DESTDIR)/usr/lib/uppd/providers/lib
 	$(INSTALL) $(EXECUTABLE) $(DESTDIR)/$(prefix)/bin
 	$(INSTALL) $(DAEMON) $(DESTDIR)/$(prefix)/bin
-	$(INSTALL) $(WPSAPI_PROVIDER) $(DESTDIR)/usr/lib/wpsd/providers
-	$(INSTALL) wpsapi/lib/libwpsapi-fedora.so $(DESTDIR)/usr/lib/wpsd/providers/lib
-	$(INSTALL) wpsapi/lib/libwpsapi-ubuntu.so $(DESTDIR)/usr/lib/wpsd/providers/lib
-	$(INSTALL) wpsd.service $(DESTDIR)/usr/lib/systemd/system
-	$(INSTALL) wpsd.conf $(DESTDIR)/$(SYSCONFDIR)
+	$(INSTALL) $(WPSAPI_PROVIDER) $(DESTDIR)/usr/lib/uppd/providers
+	$(INSTALL) wpsapi/lib/libwpsapi-fedora.so $(DESTDIR)/usr/lib/uppd/providers/lib
+	$(INSTALL) wpsapi/lib/libwpsapi-ubuntu.so $(DESTDIR)/usr/lib/uppd/providers/lib
+	$(INSTALL) uppd.service $(DESTDIR)/usr/lib/systemd/system
+	$(INSTALL) uppd.conf $(DESTDIR)/$(SYSCONFDIR)
 
 uninstall:
 	$(RM) $(DESTDIR)/$(prefix)/bin/$(EXECUTABLE)
