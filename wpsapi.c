@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include "wpsapi/include/wpsapi.h"
-#include "logger.h"
 #include "upp_provider.h"
 
 #define WPSAPI_LIB "/usr/lib/uppd/providers/lib/libwpsapi-ubuntu.so"
