@@ -48,6 +48,7 @@ struct wps_location *provider_get_location(int address_lookup)
 	result->accuracy = location->hpe;
 	result->speed = location->speed;
 	result->bearing = location->bearing;
+	result->type = UPP_PROVIDER_TYPE_WIFI;
 	#if 0
 	if (_address_lookup)
 	{

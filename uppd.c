@@ -70,7 +70,20 @@ static void update_location()
 		i += sprintf(_location + i, "Accuracy: %lf\n", loc->accuracy);
 		i += sprintf(_location + i, "Speed: %lf\n", loc->speed);
 		i += sprintf(_location + i, "Bearing: %lf\n", loc->bearing);
-		i += sprintf(_location + i, "Type: Wifi\n");
+
+		switch (loc->type)
+		{
+		case UPP_PROVIDER_TYPE_WIFI:
+			i += sprintf(_location + i, "Type: WIFI\n");
+			break;
+		case UPP_PROVIDER_TYPE_GPS:
+			i += sprintf(_location + i, "Type: GPS\n");
+			break;
+		default:
+			i += sprintf(_location + i, "Type: Unknown\n");
+			break;
+		}
+			
 		#if 0
 		if (_address_lookup)
 		{

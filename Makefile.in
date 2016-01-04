@@ -27,7 +27,7 @@ $(WPSAPI_PROVIDER): $(OBJECTS)
 	$(CC) -shared -ldl -o $@ wpsapi.o
 
 $(NMEA_PROVIDER): $(OBJECTS)
-	$(CC) -shared -lbluetooth -o $@ nmea.o
+	$(CC) -shared -lbluetooth -lpthread -o $@ nmea.o
 
 .c.o:
 	$(CC) -fPIC $(CFLAGS) -c $< -o $@
