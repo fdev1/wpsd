@@ -50,8 +50,15 @@ static void update_location()
 	if (_next_update <= (unsigned long) time(NULL))
 	{
 		int i = 0;
-		struct wps_location *loc;
-		loc = _providers->get_location(0);
+		struct wps_location *loc = NULL;
+		struct wps_provider *provider = _providers;
+		do
+		{
+			loc = provider->get_location(0);
+			provider = provider->next;
+		}
+		while (loc == NULL && provider != NULL);
+
 		if (loc == NULL)
 		{
 			_context->logger(LOG_ERR, "Could not get location: get_location() failed");
@@ -273,7 +280,7 @@ static int read_config()
  */
 static void print_usage()
 {
-	printf("usage: wpsd [options]\n");
+	printf("usage: uppd [options]\n");
 	printf("\n");
 	printf("Options:\n");
 	printf("  --daemon\tRun as a daemon\n");
