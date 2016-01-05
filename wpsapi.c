@@ -44,11 +44,11 @@ static void *worker(void *arg)
 			sleep(10);
 			continue;
 		}
+		pthread_mutex_lock(_context->wireless_lock);
 		ret = _wps_location(NULL, WPS_NO_STREET_ADDRESS_LOOKUP, &location);
 		if (ret != WPS_OK)
 		{
 			_context->logger(LOG_ERR, "Call to WPS_location() failed");
-			sleep(20);
 		}
 		else
 		{
@@ -62,8 +62,9 @@ static void *worker(void *arg)
 			_location.type = UPP_PROVIDER_TYPE_WIFI;
 			_location.timestamp = time(NULL);
 			_wps_free_location(location);
-			sleep(5);
 		}
+		pthread_mutex_unlock(_context->wireless_lock);
+		sleep(5);
 	}
 	return NULL;
 }

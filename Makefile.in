@@ -20,7 +20,7 @@ $(EXECUTABLE): $(OBJECTS)
 	$(CC) -o $@ upp.o
 
 $(DAEMON): $(OBJECTS)
-	$(CC) -ldl -o $@ uppd.o utils.o logger.o
+	$(CC) -ldl -lpthread -o $@ uppd.o utils.o logger.o
 	sed -e "s|@PREFIX@|$(prefix)|g" uppd.service.in > uppd.service
 
 $(WPSAPI_PROVIDER): $(OBJECTS)

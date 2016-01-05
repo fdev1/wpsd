@@ -2,6 +2,7 @@
 #define __UPP_H__
 
 #include <time.h>
+#include <pthread.h>
 
 #define UPP_PROVIDER_TYPE_UNKNOWN		(0)
 #define UPP_PROVIDER_TYPE_WIFI			(1)
@@ -18,6 +19,7 @@ struct wps_context
 {
 	int status;
 	struct config_entry *config;
+	pthread_mutex_t *wireless_lock;
 	unsigned int (*get_idle_time)();
 	const char * (*get_config)(struct wps_context *context, const char *name);
 	void (*logger)(int level, const char *fmt, ...);

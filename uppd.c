@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <dirent.h>
+#include <pthread.h>
 
 #include "utils.h"
 #include "logger.h"
@@ -35,6 +36,7 @@ static char *_config_file = NULL;
 static time_t _last_request = 0;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
+static pthread_mutex_t _wireless_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Upp context and providers list
@@ -380,6 +382,7 @@ int main(int argc, char **argv)
 	_context->logger = &log_message;
 	_context->get_config = &get_config;
 	_context->get_idle_time = &get_idle_time;
+	_context->wireless_lock = &_wireless_lock;
 	_context->config = NULL;
 	_last_request = time(NULL);
 

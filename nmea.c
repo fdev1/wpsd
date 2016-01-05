@@ -123,6 +123,7 @@ static void save_bt_device(char *addr)
 	if (write(fd, addr, strlen(addr)) == -1)
 	{
 		_context->logger(LOG_ERR, "Could not write to %s", filename);
+		perror("write()");
 		return;
 	}
 	if (write(fd, &newline, 1) == -1)
@@ -161,12 +162,15 @@ static int connect_to_bt_gps()
 	/* initialize uuid */
 	sdp_uuid128_create(&svc_uuid, &svc_uuid_int);
 
+	pthread_mutex_lock(_context->wireless_lock);
+
 	dev_id = hci_get_route(NULL);
 	sock = hci_open_dev(dev_id);
 	if (dev_id < 0 || sock < 0)
 	{
 		_context->logger(LOG_ERR, "Error opening socket");
 		perror("opening socket");
+		pthread_mutex_unlock(_context->wireless_lock);
 		return -1;
 	}
 	len = 8;
@@ -176,12 +180,14 @@ static int connect_to_bt_gps()
 	if (ii == NULL)
 	{
 		_context->logger(LOG_ERR, "Out of memory: malloc() failed");
+		pthread_mutex_unlock(_context->wireless_lock);
 		return -1;
 	}
 	num_rsp = hci_inquiry(dev_id, len, max_rsp, NULL, &ii, flags);
 	if (num_rsp < 0)
 	{
 		_context->logger(LOG_WRN, "hci_inquiry() failed");
+		pthread_mutex_unlock(_context->wireless_lock);
 		free(ii);
 		return -1;
 	}
@@ -257,7 +263,7 @@ static int connect_to_bt_gps()
 											_connected = 1;
 											_context->status = UPP_STATUS_ONLINE;
 											_context->logger(LOG_MSG, "Connection established");
-											save_bt_device(addr);
+											//save_bt_device(addr);
 										}
 									}
 								}
@@ -276,6 +282,7 @@ static int connect_to_bt_gps()
 	}
 	free(ii);
 	close(sock);
+	pthread_mutex_unlock(_context->wireless_lock);
 	return 0;
 }
 #endif
