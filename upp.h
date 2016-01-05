@@ -18,6 +18,7 @@ struct wps_context
 {
 	int status;
 	struct config_entry *config;
+	unsigned int (*get_idle_time)();
 	const char * (*get_config)(struct wps_context *context, const char *name);
 	void (*logger)(int level, const char *fmt, ...);
 };

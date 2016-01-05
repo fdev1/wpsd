@@ -24,7 +24,7 @@ $(DAEMON): $(OBJECTS)
 	sed -e "s|@PREFIX@|$(prefix)|g" uppd.service.in > uppd.service
 
 $(WPSAPI_PROVIDER): $(OBJECTS)
-	$(CC) -shared -ldl -o $@ wpsapi.o
+	$(CC) -shared -ldl -lpthread -o $@ wpsapi.o
 
 $(NMEA_PROVIDER): $(OBJECTS)
 	$(CC) -shared -lbluetooth -lpthread -o $@ nmea.o

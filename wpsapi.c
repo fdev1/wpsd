@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <pthread.h>
+#include <string.h>
 #include "wpsapi/include/wpsapi.h"
 #include "upp_provider.h"
 
@@ -21,58 +23,49 @@ static _wps_load_func _wps_load = NULL;
 static _wps_location_func _wps_location = NULL;
 static _wps_free_location_func _wps_free_location = NULL;
 static char *_wpsapi_lib_path = NULL;
-static struct wps_context *_context = NULL;
 
-struct wps_location *provider_get_location(int address_lookup)
+static pthread_t _worker = NULL;
+static struct wps_context *_context = NULL;
+static struct wps_location _location;
+
+/**
+ * Keep location up-to-date
+ */
+static void *worker(void *arg)
 {
 	WPS_ReturnCode ret;
 	WPS_Location *location;
-	WPS_StreetAddressLookup lookup =
-		(address_lookup) ? WPS_FULL_STREET_ADDRESS_LOOKUP : WPS_NO_STREET_ADDRESS_LOOKUP;
-	struct wps_location *result;
-	result = malloc(sizeof(struct wps_location));
-	if (result == NULL)
+	//WPS_StreetAddressLookup lookup =
+	//	(address_lookup) ? WPS_FULL_STREET_ADDRESS_LOOKUP : WPS_NO_STREET_ADDRESS_LOOKUP;
+	while (1)
 	{
-		_context->logger(LOG_ERR, "Out of memory: malloc() failed");
-		return result;
-	}
-	ret = _wps_location(NULL, lookup, &location);
-	if (ret != WPS_OK)
-	{
-		_context->logger(LOG_ERR, "Call to WPS_location() failed");
-		return NULL;
-	}
-	result->latitude = location->latitude;
-	result->longitude = location->longitude;
-	result->sources = location->nap;
-	result->accuracy = location->hpe;
-	result->speed = location->speed;
-	result->bearing = location->bearing;
-	result->type = UPP_PROVIDER_TYPE_WIFI;
-	#if 0
-	if (_address_lookup)
-	{
-		i += sprintf(_location + i, "Street Number: %s\n", 
-		location->street_address->street_number);
-		while (location->street_address->address_line[j] != NULL)
+		if (_context->get_idle_time() > 120)
 		{
-			i += sprintf(_location + i, "Street[%i]: %s\n", j, 
-				location->street_address->address_line[j]);
-			j++;
+			sleep(10);
+			continue;
 		}
-		i += sprintf(_location + i, "City: %s\n", location->street_address->city);
-		i += sprintf(_location + i, "State: %s\n", location->street_address->state.name);
-		i += sprintf(_location + i, "State Code: %s\n", location->street_address->state.code);
-		i += sprintf(_location + i, "Postal Code: %s\n", location->street_address->postal_code);
-		i += sprintf(_location + i, "County: %s\n", location->street_address->county);
-		i += sprintf(_location + i, "Province: %s\n", location->street_address->province);
-		i += sprintf(_location + i, "Region: %s\n", location->street_address->region);
-		i += sprintf(_location + i, "Country: %s\n", location->street_address->country.name);
-		i += sprintf(_location + i, "Country Code: %s\n", location->street_address->country.code);
+		ret = _wps_location(NULL, WPS_NO_STREET_ADDRESS_LOOKUP, &location);
+		if (ret != WPS_OK)
+		{
+			_context->logger(LOG_ERR, "Call to WPS_location() failed");
+			sleep(20);
+		}
+		else
+		{
+			_context->status = UPP_STATUS_ONLINE;
+			_location.latitude = location->latitude;
+			_location.longitude = location->longitude;
+			_location.sources = location->nap;
+			_location.accuracy = location->hpe;
+			_location.speed = location->speed;
+			_location.bearing = location->bearing;
+			_location.type = UPP_PROVIDER_TYPE_WIFI;
+			_location.timestamp = time(NULL);
+			_wps_free_location(location);
+			sleep(5);
+		}
 	}
-	#endif
-	_wps_free_location(location);
-	return result;
+	return NULL;
 }
 
 /**
@@ -120,6 +113,14 @@ static int wpsapi_library_load()
 }
 
 /**
+ * Get the location
+ */
+struct wps_location *provider_get_location(int address_lookup)
+{
+	return &_location;
+}
+
+/**
  * Initialize the provider
  */
 int provider_init(struct wps_context *context)
@@ -127,7 +128,18 @@ int provider_init(struct wps_context *context)
 	if (context == NULL)
 		return WPS_PROVIDER_FAILURE;
 	_context = context;
+	_context->status = UPP_STATUS_OFFLINE;
+	memset(&_location, 0, sizeof(struct wps_location));
 	if (_wpsapi_lib_path == NULL)
 		_wpsapi_lib_path = WPSAPI_LIB;
-	return wpsapi_library_load();
+	if (wpsapi_library_load() != WPS_PROVIDER_SUCCESS)
+		return WPS_PROVIDER_FAILURE;
+
+	/* start worker thread */
+	if (pthread_create(&_worker, NULL, &worker, (void*) NULL))
+	{
+		_context->logger(LOG_ERR, "Initialization error: pthread_create() failed");
+		return WPS_PROVIDER_FAILURE;
+	}
+	return WPS_PROVIDER_SUCCESS;
 }

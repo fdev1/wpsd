@@ -202,6 +202,7 @@ static int connect_to_bt_gps()
 										else
 										{
 											_connected = 1;
+											_context->status = UPP_STATUS_ONLINE;
 											_context->logger(LOG_MSG, "Connection established");
 										}
 									}
@@ -232,6 +233,8 @@ static void *nmea_listener(void* arg)
 		if (!_connected)
 		{
 			sleep(scan_interval);
+			if (_context->get_idle_time() > 120)
+				continue;
 			if (connect_to_bt_gps() == -1)
 				scan_interval = _scan_interval;
 			else
@@ -252,8 +255,15 @@ static void *nmea_listener(void* arg)
 				last_char = sentence[i];
 				i++;
 			}
-			if (i == 0)
+			if (i == 0 || _context->get_idle_time() > 120)
+			{
+				_context->logger(LOG_ERR, "Disconnected");
+				_context->status = UPP_STATUS_OFFLINE;
 				_connected = 0;
+				close(_gps_socket);
+				_gps_socket = -1;
+				continue;
+			}
 
 			field = nmea_next_field(sentence, &sentence);
 			if (!strcmp("$GPGGA", field))
@@ -300,7 +310,6 @@ static void *nmea_listener(void* arg)
 			}
 			else if (!strcmp("$GPGLL", field) || !strcmp("$LCGLL", field))
 			{
-				printf("Got GLL\n");
 				char *ddm_lat = nmea_next_field(sentence, &sentence);
 				char *ddm_lat_dir = nmea_next_field(sentence, &sentence);
 				char *ddm_lon = nmea_next_field(sentence, &sentence);
@@ -311,9 +320,11 @@ static void *nmea_listener(void* arg)
 				_location.longitude = nmea_ddm_to_dec(ddm_lon, ddm_lon_dir[0]);
 				_location.timestamp = nmea_time_to_time_t(nmea_next_field(sentence, &sentence));
 
+				#if 0
 				printf("Latitude: %lf\n", _location.latitude);
 				printf("Longitude: %lf\n", _location.longitude);
 				printf("Time: %s", asctime(localtime(&_location.timestamp)));
+				#endif
 			}
 		}
 	}
@@ -337,6 +348,7 @@ int provider_init(struct wps_context *context)
 {
 	const char *scan_interval;
 	_context = context;
+	_context->status = UPP_STATUS_OFFLINE;
 	memset(&_location, 0, sizeof(struct wps_location));
 	scan_interval = _context->get_config(_context, "bluetooth_scan_interval");
 	if (scan_interval != NULL)

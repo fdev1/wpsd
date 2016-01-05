@@ -32,6 +32,7 @@ static char _address_lookup = 1;
 static char *_socket_path = NULL;
 static char *_wpsapi_lib_path = NULL;
 static char *_config_file = NULL;
+static time_t _last_request = 0;
 static unsigned long _next_update = 0;
 static unsigned int _update_interval = 10;
 
@@ -47,6 +48,7 @@ static struct wps_provider *_providers = NULL;
  */
 static void update_location()
 {
+	_last_request = time(NULL);
 	if (_next_update <= (unsigned long) time(NULL))
 	{
 		int i = 0;
@@ -156,6 +158,11 @@ static int start_listening()
 	}
 }
 
+static unsigned int get_idle_time()
+{
+	return (unsigned int) (time(NULL) - _last_request);
+}
+
 /**
  * Load location providers
  */
@@ -190,6 +197,7 @@ static int load_providers()
 		if (handle == NULL)
 		{
 			_context->logger(LOG_ERR, "Could not load provider module %s", entry->d_name);
+			_context->logger(LOG_ERR, "%s", dlerror());
 			continue;
 		}
 		provider = malloc(sizeof(struct wps_provider));
@@ -371,7 +379,9 @@ int main(int argc, char **argv)
 
 	_context->logger = &log_message;
 	_context->get_config = &get_config;
+	_context->get_idle_time = &get_idle_time;
 	_context->config = NULL;
+	_last_request = time(NULL);
 
 	for (i = 1; i < argc; i++)
 	{
