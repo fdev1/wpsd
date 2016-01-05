@@ -10,12 +10,6 @@
 #define UPP_STATUS_ONLINE				(0)
 #define UPP_STATUS_OFFLINE			(1)
 
-struct wps_context
-{
-	int status;
-	void (*logger)(int level, const char *fmt, ...);
-};
-
 struct wps_location *provider_get_location(int address_lookup);
 
 int provider_init(struct wps_context *context);

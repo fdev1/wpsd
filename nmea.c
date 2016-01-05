@@ -73,7 +73,7 @@ static double nmea_ddm_to_dec(char *coords, char direction)
 	for (i = 0; coords[i] != '.' && i < 5; i++)
 		degrees[i] = coords[i];
 	degrees[i] = degrees[i - 1] = degrees[i - 2] = '\0';
-	coords += i - 1;
+	coords += i - 2;
 	sscanf(coords, "%lf", &degrees_decimal);
 	degrees_decimal /= (double) 60.0;
 	degrees_decimal += (double) atoi(degrees);
@@ -224,19 +224,18 @@ static int connect_to_bt_gps()
 	return 0;
 }
 
-
-
 static void *nmea_listener(void* arg)
 {
+	static int scan_interval = 0;
 	while (1)
 	{
 		if (!_connected)
 		{
-			sleep(_scan_interval);
+			sleep(scan_interval);
 			if (connect_to_bt_gps() == -1)
-				_scan_interval = 10;
+				scan_interval = _scan_interval;
 			else
-				_scan_interval = 0;
+				scan_interval = 30;
 		}
 		else
 		{
@@ -299,6 +298,23 @@ static void *nmea_listener(void* arg)
 				printf("=======================================\n");
 				#endif
 			}
+			else if (!strcmp("$GPGLL", field) || !strcmp("$LCGLL", field))
+			{
+				printf("Got GLL\n");
+				char *ddm_lat = nmea_next_field(sentence, &sentence);
+				char *ddm_lat_dir = nmea_next_field(sentence, &sentence);
+				char *ddm_lon = nmea_next_field(sentence, &sentence);
+				char *ddm_lon_dir = nmea_next_field(sentence, &sentence);
+
+				_location.type = UPP_PROVIDER_TYPE_GPS;
+				_location.latitude = nmea_ddm_to_dec(ddm_lat, ddm_lat_dir[0]);
+				_location.longitude = nmea_ddm_to_dec(ddm_lon, ddm_lon_dir[0]);
+				_location.timestamp = nmea_time_to_time_t(nmea_next_field(sentence, &sentence));
+
+				printf("Latitude: %lf\n", _location.latitude);
+				printf("Longitude: %lf\n", _location.longitude);
+				printf("Time: %s", asctime(localtime(&_location.timestamp)));
+			}
 		}
 	}
 	return NULL;
@@ -319,8 +335,12 @@ struct wps_location *provider_get_location(int address_lookup)
  */
 int provider_init(struct wps_context *context)
 {
+	const char *scan_interval;
 	_context = context;
 	memset(&_location, 0, sizeof(struct wps_location));
+	scan_interval = _context->get_config(_context, "bluetooth_scan_interval");
+	if (scan_interval != NULL)
+		_scan_interval = atoi(scan_interval);
 
 	/* start worker thread */
 	if (pthread_create(&_worker, NULL, &nmea_listener, (void*) NULL))

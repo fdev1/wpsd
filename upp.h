@@ -7,6 +7,22 @@
 #define UPP_PROVIDER_TYPE_WIFI			(1)
 #define UPP_PROVIDER_TYPE_GPS				(2)
 
+struct config_entry
+{
+	const char *name;
+	const char *value;
+	struct config_entry *next;
+};
+
+struct wps_context
+{
+	int status;
+	struct config_entry *config;
+	const char * (*get_config)(struct wps_context *context, const char *name);
+	void (*logger)(int level, const char *fmt, ...);
+};
+
+
 struct wps_street_address
 {
 	char *street_number;

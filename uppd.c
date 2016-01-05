@@ -70,6 +70,7 @@ static void update_location()
 		i += sprintf(_location + i, "Accuracy: %lf\n", loc->accuracy);
 		i += sprintf(_location + i, "Speed: %lf\n", loc->speed);
 		i += sprintf(_location + i, "Bearing: %lf\n", loc->bearing);
+		i += sprintf(_location + i, "Time: %s", asctime(localtime(&loc->timestamp)));
 
 		switch (loc->type)
 		{
@@ -235,6 +236,58 @@ static int load_providers()
 }
 
 /**
+ * Get a config entry
+ */
+static const char *get_config(struct wps_context *context, const char *name)
+{
+	struct config_entry *entry;
+	entry = context->config;
+	while (entry != NULL)
+	{
+		if (!strcasecmp(name, entry->name))
+			return entry->value;
+		entry = entry->next;
+	}
+	return NULL;
+}
+
+static int add_config(struct wps_context *context,
+	const char *name, const char *value)
+{
+	struct config_entry **entry = &context->config;
+	struct config_entry *new_entry = NULL;
+	while (*entry != NULL)
+	{
+		if (!strcasecmp(name, (*entry)->name))
+			return -1;
+		entry = &(*entry)->next;
+	}
+	new_entry = (struct config_entry*) malloc(sizeof(struct config_entry));
+	if (new_entry == NULL)
+	{
+		_context->logger(LOG_ERR, "Out of memory: malloc() failed");
+		return -1;
+	}
+	new_entry->name = strdup(name);
+	if (new_entry->name == NULL)
+	{
+		_context->logger(LOG_ERR, "Out of memory: strdup() failed");
+		free(new_entry);
+		return -1;
+	}
+	new_entry->value = strdup(value);
+	if (new_entry->value == NULL)
+	{
+		_context->logger(LOG_ERR, "Out of memory: strdup() failed");
+		free((void*) new_entry->name);
+		free((void*) new_entry);
+		return -1;
+	}
+	*entry = new_entry;
+	return 0;
+}
+
+/**
  * Read config
  */
 static int read_config()
@@ -258,6 +311,8 @@ static int read_config()
 		if (*line_ptr == '#' || *line_ptr == ';' || *line_ptr == '\0')
 			continue;
 		value_ptr = split(line_ptr, '=');
+		line_ptr = strstrip(line_ptr, " \t");
+		value_ptr = strstrip(line_ptr, " \t");
 		if (!strcasecmp(line_ptr, "update_interval"))
 		{
 			_update_interval = atoi(value_ptr);
@@ -283,6 +338,10 @@ static int read_config()
 			_address_lookup = (!strcasecmp(value_ptr, "yes")) ? 1 : 0;
 			_context->logger(LOG_MSG, "Address lookup %s",
 				(_address_lookup) ? "enabled" : "disabled");
+		}
+		if (add_config(_context, line_ptr, value_ptr) == -1)
+		{
+			_context->logger(LOG_ERR, "Could not add config %s", line_ptr);
 		}
 	}
 	return 0;
@@ -311,6 +370,8 @@ int main(int argc, char **argv)
 	char do_daemonize = 0;
 
 	_context->logger = &log_message;
+	_context->get_config = &get_config;
+	_context->config = NULL;
 
 	for (i = 1; i < argc; i++)
 	{
