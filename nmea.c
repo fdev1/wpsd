@@ -103,9 +103,10 @@ static void save_bt_device(char *addr)
 	char filename[BUFSZ];
 	char read_addr[19];
 	const char newline = '\n';
+	_context->logger(LOG_MSG, "Saving %s", addr);
 	strncpy(filename, VARDIR, BUFSZ);
 	strncat(filename, "/known_devices", BUFSZ);
-	if ((fd = open(filename, O_CREAT, S_IRUSR | S_IWUSR | S_IROTH)) == -1)
+	if ((fd = open(filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IROTH)) == -1)
 	{
 		_context->logger(LOG_ERR, "Could not open %s", filename);
 		return;
@@ -119,7 +120,6 @@ static void save_bt_device(char *addr)
 			return;
 		}
 	}
-	lseek(fd, 0, SEEK_SET);
 	if (write(fd, addr, strlen(addr)) == -1)
 	{
 		_context->logger(LOG_ERR, "Could not write to %s", filename);
@@ -191,7 +191,7 @@ static int connect_to_bt_gps()
 		free(ii);
 		return -1;
 	}
-	for (i = 0; i < num_rsp; i++)
+	for (i = 0; !_connected && i < num_rsp; i++)
 	{
 		ba2str(&(ii + i)->bdaddr, addr);
 		memset(name, 0, sizeof(name));
@@ -230,7 +230,7 @@ static int connect_to_bt_gps()
 					{
 						// check the protocol attributes
 						int proto = 0;
-						for (d = (sdp_data_t*) pds->data; d != NULL; d = d->next)
+						for (d = (sdp_data_t*) pds->data; !_connected && d != NULL; d = d->next)
 						{
 							switch (d->dtd)
 							{ 
@@ -263,7 +263,7 @@ static int connect_to_bt_gps()
 											_connected = 1;
 											_context->status = UPP_STATUS_ONLINE;
 											_context->logger(LOG_MSG, "Connection established");
-											//save_bt_device(addr);
+											save_bt_device(addr);
 										}
 									}
 								}
