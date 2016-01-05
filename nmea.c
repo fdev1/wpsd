@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <time.h>
 #include <bluetooth/bluetooth.h>
@@ -10,6 +13,10 @@
 #include <bluetooth/sdp_lib.h>
 #include <bluetooth/rfcomm.h>
 #include "upp_provider.h"
+#include "utils.h"
+
+#define ENABLE_BLUETOOTH
+#define VARDIR "/var/lib/upp"
 
 static struct wps_context *_context = NULL;
 static struct wps_location _location;
@@ -80,6 +87,52 @@ static double nmea_ddm_to_dec(char *coords, char direction)
 	if (direction == 'W' || direction == 'S')
 		degrees_decimal -= (degrees_decimal * 2);
 	return degrees_decimal;
+}
+
+#ifdef ENABLE_BLUETOOTH
+
+/**
+ * Save the paired device address so we can
+ * connect to it later without it being discoverable
+ * TODO: Is there a better way?
+ */
+static void save_bt_device(char *addr)
+{
+	#define BUFSZ (256)
+	int fd;
+	char filename[BUFSZ];
+	char read_addr[19];
+	const char newline = '\n';
+	strncpy(filename, VARDIR, BUFSZ);
+	strncat(filename, "/known_devices", BUFSZ);
+	if ((fd = open(filename, O_CREAT, S_IRUSR | S_IWUSR | S_IROTH)) == -1)
+	{
+		_context->logger(LOG_ERR, "Could not open %s", filename);
+		return;
+	}
+
+	while (fd_readline(fd, &read_addr[0], 19) != NULL)
+	{
+		if (!strcmp(read_addr, addr))
+		{
+			close(fd);
+			return;
+		}
+	}
+	lseek(fd, 0, SEEK_SET);
+	if (write(fd, addr, strlen(addr)) == -1)
+	{
+		_context->logger(LOG_ERR, "Could not write to %s", filename);
+		return;
+	}
+	if (write(fd, &newline, 1) == -1)
+	{
+		_context->logger(LOG_ERR, "Could not write to %s", filename);
+		return;
+	}
+	close(fd);
+	return;
+	#undef BUFSZ
 }
 
 /**
@@ -191,11 +244,11 @@ static int connect_to_bt_gps()
 									}
 									else
 									{
-										struct sockaddr_rc addr = { 0 };
-										addr.rc_family = AF_BLUETOOTH;
-										addr.rc_channel = d->val.int8;
-										addr.rc_bdaddr = (ii + i)->bdaddr;
-										if (connect(_gps_socket, (struct sockaddr*) &addr, sizeof(addr)) == -1)
+										struct sockaddr_rc saddr = { 0 };
+										saddr.rc_family = AF_BLUETOOTH;
+										saddr.rc_channel = d->val.int8;
+										saddr.rc_bdaddr = (ii + i)->bdaddr;
+										if (connect(_gps_socket, (struct sockaddr*) &saddr, sizeof(saddr)) == -1)
 										{
 											_context->logger(LOG_ERR, "connect() failed");
 										}
@@ -204,6 +257,7 @@ static int connect_to_bt_gps()
 											_connected = 1;
 											_context->status = UPP_STATUS_ONLINE;
 											_context->logger(LOG_MSG, "Connection established");
+											save_bt_device(addr);
 										}
 									}
 								}
@@ -224,6 +278,7 @@ static int connect_to_bt_gps()
 	close(sock);
 	return 0;
 }
+#endif
 
 static void *nmea_listener(void* arg)
 {
