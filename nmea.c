@@ -136,33 +136,146 @@ static void save_bt_device(char *addr)
 	#undef BUFSZ
 }
 
-/**
- * Detect and connect to bt gps receivers
- */
-static int connect_to_bt_gps()
+static int connect_to_bt_gps(bdaddr_t *addr)
 {
-	inquiry_info *ii = NULL;
-	int dev_id, sock, len, max_rsp, num_rsp, flags, i;
-	char addr[19] = { '\0' };
-	char name[248] = { '\0' };
 	/* 00001101-0000-1000-8000-00805f9b34fb */
 	uint8_t svc_uuid_int[] =
 	{
 		0x00, 0x00, 0x11, 0x01, 0x00, 0x00, 0x10, 0x00,
 		0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb 
 	};
+	int err;
 	uuid_t svc_uuid;
+	sdp_list_t *response_list = NULL, *search_list, *attrid_list;
 	sdp_list_t *r, *p, *pds, *proto_list;
 	sdp_data_t *d;
 	uint32_t range = 0x0000ffff;
-	int err;
+	sdp_session_t *session = 0;
 
-	_context->logger(LOG_WRN, "Scanning for bluetooth GPS...");
-	
 	/* initialize uuid */
 	sdp_uuid128_create(&svc_uuid, &svc_uuid_int);
 
+	// connect to the SDP server running on the remote machine
+	// specify the UUID of the application we're searching for
+	// specify that we want a list of all the matching applications' attributes
+	// get a list of service records that have UUID 0xabcd
+	session = sdp_connect(BDADDR_ANY, addr, SDP_RETRY_IF_BUSY);
+	search_list = sdp_list_append(NULL, &svc_uuid);
+	attrid_list = sdp_list_append(NULL, &range);
+	err = sdp_service_search_attr_req(session, search_list,
+		SDP_ATTR_REQ_RANGE, attrid_list, &response_list);
+	if (err)
+		_context->logger(LOG_WRN, "Error %i", err);
+
+	// go through each of the service records
+	for (r = response_list; !_connected && r != NULL; r = r->next)
+	{
+		sdp_record_t *rec = (sdp_record_t*) r->data;
+
+		// get a list of the protocol sequences
+		if (sdp_get_access_protos(rec, &proto_list) == 0)
+		{
+			// go through each protocol sequence
+			for (p = proto_list; !_connected && p != NULL; p = p->next)
+			{
+				// go through each protocol list of the protocol sequence
+				for(pds = (sdp_list_t*) p->data; !_connected && pds != NULL; pds = pds->next)
+				{
+					// check the protocol attributes
+					int proto = 0;
+					for (d = (sdp_data_t*) pds->data; !_connected && d != NULL; d = d->next)
+					{
+						switch (d->dtd)
+						{ 
+						case SDP_UUID16:
+						case SDP_UUID32:
+						case SDP_UUID128:
+							proto = sdp_uuid_to_proto( &d->val.uuid );
+							break;
+						case SDP_UINT8:
+							if (proto == RFCOMM_UUID)
+							{
+								_context->logger(LOG_MSG, "rfcomm channel: %d",d->val.int8);
+								_gps_socket = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+								if (_gps_socket == -1)
+								{
+									_context->logger(LOG_ERR, "socket() failed");
+								}
+								else
+								{
+									struct sockaddr_rc saddr = { 0 };
+									saddr.rc_family = AF_BLUETOOTH;
+									saddr.rc_channel = d->val.int8;
+									saddr.rc_bdaddr = *addr;
+									if (connect(_gps_socket, (struct sockaddr*) &saddr, sizeof(saddr)) == -1)
+									{
+										_context->logger(LOG_ERR, "connect() failed");
+										return -1;
+									}
+									else
+									{
+										char str_addr[19];
+										_connected = 1;
+										_context->status = UPP_STATUS_ONLINE;
+										_context->logger(LOG_MSG, "Connection established");
+										ba2str(addr, str_addr);
+										save_bt_device(str_addr);
+										return 0;
+									}
+								}
+							}
+							break;
+						}
+					}
+				}
+				sdp_list_free((sdp_list_t*)p->data, 0);
+			}
+			sdp_list_free( proto_list, 0 );
+		}
+		printf("found service record 0x%x\n", rec->handle);
+		sdp_record_free(rec);
+	}
+	sdp_close(session);
+	return -1;
+}
+
+static int connect_to_known_bt_gps()
+{
+	#define BUFSZ (256)
+	int fd;
+	char filename[BUFSZ];
+	char read_addr[19];
+	strncpy(filename, VARDIR, BUFSZ);
+	strncat(filename, "/known_devices", BUFSZ);
+	if ((fd = open(filename, O_RDONLY, S_IRUSR | S_IWUSR | S_IROTH)) == -1)
+	{
+		_context->logger(LOG_ERR, "Could not open %s", filename);
+		return -1;
+	}
+	while (fd_readline(fd, &read_addr[0], 19) != NULL)
+	{
+		bdaddr_t addr;
+		str2ba(read_addr, &addr);
+		if (connect_to_bt_gps(&addr) == 0)
+			return 0;
+	}
+	close(fd);
+	return -1;
+	#undef BUFSZ
+}
+
+/**
+ * Detect and connect to bt gps receivers
+ */
+static int discover_bt_gps()
+{
+	inquiry_info *ii = NULL;
+	int dev_id, sock, len, max_rsp, num_rsp, flags, i;
+	char addr[19] = { '\0' };
+	char name[248] = { '\0' };
+
 	pthread_mutex_lock(_context->wireless_lock);
+	_context->logger(LOG_WRN, "Scanning for bluetooth GPS...");
 
 	dev_id = hci_get_route(NULL);
 	sock = hci_open_dev(dev_id);
@@ -197,88 +310,8 @@ static int connect_to_bt_gps()
 		memset(name, 0, sizeof(name));
 		if (hci_read_remote_name(sock, &(ii+i)->bdaddr, sizeof(name), name, 0) < 0)
 			strcpy(name, "[unknown]");
-		_context->logger(LOG_MSG, ">> %s %s", addr, name);
-
-		sdp_list_t *response_list = NULL, *search_list, *attrid_list;
-		sdp_session_t *session = 0;
-
-		// connect to the SDP server running on the remote machine
-		// specify the UUID of the application we're searching for
-		// specify that we want a list of all the matching applications' attributes
-		// get a list of service records that have UUID 0xabcd
-		session = sdp_connect(BDADDR_ANY, &(ii + i)->bdaddr, SDP_RETRY_IF_BUSY);
-		search_list = sdp_list_append(NULL, &svc_uuid);
-		attrid_list = sdp_list_append(NULL, &range);
-		err = sdp_service_search_attr_req(session, search_list,
-			SDP_ATTR_REQ_RANGE, attrid_list, &response_list);
-		if (err)
-			_context->logger(LOG_WRN, "Error %i", err);
-
-		// go through each of the service records
-		for (r = response_list; !_connected && r != NULL; r = r->next)
-		{
-			sdp_record_t *rec = (sdp_record_t*) r->data;
-
-			// get a list of the protocol sequences
-			if (sdp_get_access_protos(rec, &proto_list) == 0)
-			{
-				// go through each protocol sequence
-				for (p = proto_list; !_connected && p != NULL; p = p->next)
-				{
-					// go through each protocol list of the protocol sequence
-					for(pds = (sdp_list_t*) p->data; !_connected && pds != NULL; pds = pds->next)
-					{
-						// check the protocol attributes
-						int proto = 0;
-						for (d = (sdp_data_t*) pds->data; !_connected && d != NULL; d = d->next)
-						{
-							switch (d->dtd)
-							{ 
-							case SDP_UUID16:
-							case SDP_UUID32:
-							case SDP_UUID128:
-								proto = sdp_uuid_to_proto( &d->val.uuid );
-								break;
-							case SDP_UINT8:
-								if (proto == RFCOMM_UUID)
-								{
-									_context->logger(LOG_MSG, "rfcomm channel: %d",d->val.int8);
-									_gps_socket = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-									if (_gps_socket == -1)
-									{
-										_context->logger(LOG_ERR, "socket() failed");
-									}
-									else
-									{
-										struct sockaddr_rc saddr = { 0 };
-										saddr.rc_family = AF_BLUETOOTH;
-										saddr.rc_channel = d->val.int8;
-										saddr.rc_bdaddr = (ii + i)->bdaddr;
-										if (connect(_gps_socket, (struct sockaddr*) &saddr, sizeof(saddr)) == -1)
-										{
-											_context->logger(LOG_ERR, "connect() failed");
-										}
-										else
-										{
-											_connected = 1;
-											_context->status = UPP_STATUS_ONLINE;
-											_context->logger(LOG_MSG, "Connection established");
-											save_bt_device(addr);
-										}
-									}
-								}
-								break;
-							}
-						}
-					}
-					sdp_list_free((sdp_list_t*)p->data, 0);
-				}
-				sdp_list_free( proto_list, 0 );
-			}
-			printf("found service record 0x%x\n", rec->handle);
-			sdp_record_free(rec);
-		}
-		sdp_close(session);
+		_context->logger(LOG_MSG, "Discovered %s %s", addr, name);
+		connect_to_bt_gps(&ii[i].bdaddr);
 	}
 	free(ii);
 	close(sock);
@@ -297,10 +330,13 @@ static void *nmea_listener(void* arg)
 			sleep(scan_interval);
 			if (_context->get_idle_time() > 120)
 				continue;
-			if (connect_to_bt_gps() == -1)
-				scan_interval = _scan_interval;
-			else
-				scan_interval = 30;
+			if (connect_to_known_bt_gps() == -1)
+			{
+				if (discover_bt_gps() == -1)
+					scan_interval = _scan_interval;
+				else
+					scan_interval = 30;
+			}
 		}
 		else
 		{
