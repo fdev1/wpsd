@@ -47,3 +47,7 @@ What doesn't work yet
 	to a binary format (so it won't have to be parsed) and add a 
 	pseudo-terminal (virtual serial port) that provides the information
 	in NMEA format so it can be used by existing GPS applications.
+
+- There's no license yet (since this is not an official release), once
+  version 0.1 is released it will be under either GPL or a permissive
+	license.
