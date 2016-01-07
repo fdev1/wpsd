@@ -41,3 +41,9 @@ What doesn't work yet
 
 - The commit logs suck. Once we reach a v0.1 release I will rebase
   them on a new repo called uppd.
+
+- The position information is currently provided to other programs
+  through a unix socket in plain text. Soon I will change the socket
+	to a binary format (so it won't have to be parsed) and add a 
+	pseudo-terminal (virtual serial port) that provides the information
+	in NMEA format so it can be used by existing GPS applications.
