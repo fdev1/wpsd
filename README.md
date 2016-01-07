@@ -1,12 +1,12 @@
 Unified Position Provider Daemon
 ================================
 
-This is unified position provider for Linux (besides from
-the Bluetooth features should work on any unixy OS with little
-or no modification). It can take the position from different 
-providers (currently GPS and Wifi position) and provides the most 
-accurate location to other programs. Providers are implemented as
-plugins. It is in very early stages of development but it's working.
+This is unified position provider for Linux (besides the Bluetooth 
+features should work on any unixy OS with little or no modification).
+It can take the position from different providers (currently GPS and
+Wifi position) and provides the most accurate location to other programs.
+Providers are implemented as plugins. It is in very early stages of
+development but it's working (somewhat).
 
 What works
 ----------
